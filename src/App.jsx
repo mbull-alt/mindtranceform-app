@@ -22,19 +22,35 @@ export default function MindTranceformApp() {
   const generateSession = async () => {
     setLoading(true);
     try {
-      const response = await fetch("https://mindtranceform-backend.onrender.com/generate-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(form),
-      });
+      const response = await fetch(
+        "https://mindtranceform-backend.onrender.com/generate-session",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(form),
+        }
+      );
 
       const data = await response.json();
-      setResult(data);
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          typeof data.error === "string" ? data.error : "Could not generate session."
+        );
+      }
+
+      const audioUrl = `data:${data.mimeType};base64,${data.audioBase64}`;
+
+      setResult({
+        script: data.script,
+        audioUrl,
+      });
+
       setStep(5);
     } catch (error) {
-      alert("Could not generate session.");
+      alert(error.message || "Could not generate session.");
       console.error(error);
     } finally {
       setLoading(false);
@@ -43,7 +59,15 @@ export default function MindTranceformApp() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#0f172a", color: "white", padding: 20 }}>
-      <div style={{ maxWidth: 600, margin: "0 auto", background: "#1e293b", padding: 20, borderRadius: 10 }}>
+      <div
+        style={{
+          maxWidth: 600,
+          margin: "0 auto",
+          background: "#1e293b",
+          padding: 20,
+          borderRadius: 10,
+        }}
+      >
         <h1>Mind Tranceform</h1>
 
         {step === 1 && (
@@ -56,7 +80,9 @@ export default function MindTranceformApp() {
               onChange={handleChange}
               placeholder="Enter your name"
             />
-            <button onClick={next} style={{ marginTop: 10 }}>Next</button>
+            <button onClick={next} style={{ marginTop: 10 }}>
+              Next
+            </button>
           </div>
         )}
 
@@ -72,7 +98,9 @@ export default function MindTranceformApp() {
             />
             <div style={{ marginTop: 10 }}>
               <button onClick={back}>Back</button>
-              <button onClick={next} style={{ marginLeft: 10 }}>Next</button>
+              <button onClick={next} style={{ marginLeft: 10 }}>
+                Next
+              </button>
             </div>
           </div>
         )}
@@ -87,7 +115,9 @@ export default function MindTranceformApp() {
             </select>
             <div style={{ marginTop: 10 }}>
               <button onClick={back}>Back</button>
-              <button onClick={next} style={{ marginLeft: 10 }}>Next</button>
+              <button onClick={next} style={{ marginLeft: 10 }}>
+                Next
+              </button>
             </div>
           </div>
         )}
@@ -121,4 +151,4 @@ export default function MindTranceformApp() {
       </div>
     </div>
   );
-}
+}}
