@@ -295,6 +295,8 @@ export default function MindTranceformApp() {
   const [result, setResult] = useState(null);
 
   // Sessions
+  const [genStep, setGenStep] = useState(0);
+
   const [sessions, setSessions]             = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
@@ -309,6 +311,13 @@ export default function MindTranceformApp() {
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
   }, []);
+
+  useEffect(() => {
+    if (!generating) { setGenStep(0); return; }
+    const t1 = setTimeout(() => setGenStep(1), 3500);
+    const t2 = setTimeout(() => setGenStep(2), 8000);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [generating]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -464,6 +473,7 @@ export default function MindTranceformApp() {
   );
 
   // ── GENERATING ──
+  const GEN_STEPS = ["Writing your script...", "Creating your voice...", "Mixing your audio..."];
   if (generating) return (
     <div style={S.root}>
       <StarField />
@@ -474,7 +484,35 @@ export default function MindTranceformApp() {
             <PulseRing />
             <div style={S.genTitle}>Creating your session</div>
             <div style={S.genSub}>Personalizing for {form.name || "you"}</div>
-            <Dots />
+            <div style={{ marginTop: "2rem", textAlign: "left", display: "inline-block" }}>
+              {GEN_STEPS.map((label, i) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: "0.75rem",
+                  marginBottom: "0.75rem",
+                  opacity: i <= genStep ? 1 : 0.25,
+                  transition: "opacity 0.5s ease",
+                }}>
+                  <div style={{
+                    width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    border: i < genStep ? "none" : "1.5px solid rgba(168,216,200,0.4)",
+                    background: i < genStep ? "#a8d8c8" : "transparent",
+                    fontSize: 11, color: "#07091a",
+                    transition: "all 0.4s ease",
+                  }}>
+                    {i < genStep ? "✓" : ""}
+                  </div>
+                  <span style={{
+                    fontSize: "0.9rem",
+                    color: i === genStep ? "#e8e6f0" : i < genStep ? "#a8d8c8" : "#8a879e",
+                    transition: "color 0.4s ease",
+                  }}>
+                    {label}
+                    {i === genStep && <span style={{ color: "#a8d8c8", marginLeft: 2 }}>●</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
