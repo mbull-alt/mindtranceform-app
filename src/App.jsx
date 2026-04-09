@@ -328,6 +328,13 @@ export default function MindTranceformApp() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
       setView(session?.user ? "home" : "auth");
+      if (session?.user) {
+        // Register profile + trigger welcome email for new users (idempotent)
+        fetch(`${BACKEND_URL}/user/register`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).catch(() => {});
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
