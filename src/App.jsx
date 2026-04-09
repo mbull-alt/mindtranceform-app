@@ -8,11 +8,20 @@ const supabase = createClient(
 );
 
 // ─── DATA ────────────────────────────────────────────────────────────────────
-const PROGRAMS = [
-  { value: "Sleep",            icon: "🌙", label: "Sleep",            sub: "Deep rest & nighttime calm" },
-  { value: "Stress & Anxiety", icon: "🌊", label: "Stress & Anxiety", sub: "Quiet the mind, steady the body" },
-  { value: "Abundance",        icon: "✨", label: "Abundance",         sub: "Expand into success & possibility" },
-];
+function getProgramOptions(plan) {
+  const isPaid = plan === "premium" || plan === "pro";
+  return [
+    { value: "Sleep",                icon: "🌙", label: "Sleep",                sub: "Deep rest & nighttime calm" },
+    { value: "Stress & Anxiety",     icon: "🌊", label: "Stress & Anxiety",     sub: "Quiet the mind, steady the body" },
+    { value: "Abundance",            icon: "✨", label: "Abundance",             sub: "Expand into success & possibility" },
+    { value: "Confidence",           icon: "⚡", label: "Confidence",            sub: "Step into your power",              locked: !isPaid, badge: "🔒 Premium" },
+    { value: "Focus & Productivity", icon: "🎯", label: "Focus & Productivity",  sub: "Clear mind, sharp execution",       locked: !isPaid, badge: "🔒 Premium" },
+    { value: "Quit Smoking",         icon: "🌿", label: "Quit Smoking",          sub: "Break free for good",               locked: !isPaid, badge: "🔒 Premium" },
+    { value: "Weight Loss Mindset",  icon: "🦋", label: "Weight Loss Mindset",   sub: "Reshape how you see yourself",      locked: !isPaid, badge: "🔒 Premium" },
+    { value: "Relationship Healing", icon: "💫", label: "Relationship Healing",  sub: "Open your heart, release the past", locked: !isPaid, badge: "🔒 Premium" },
+    { value: "Abundance & Wealth",   icon: "💎", label: "Abundance & Wealth",    sub: "Reprogram your money mindset",      locked: !isPaid, badge: "🔒 Premium" },
+  ];
+}
 
 const VOICES = [
   { value: "Female Calm", icon: "◌", label: "Female Calm",        sub: "Warm, nurturing, soft" },
@@ -69,7 +78,7 @@ function buildSteps(plan) {
   const steps = [
     { id: "name",       question: "What is your name?",                        type: "input",   placeholder: "Your first name..." },
     { id: "goal",       question: "What do you want to let go of or achieve?", type: "input",   placeholder: "e.g. Release anxiety and sleep deeply..." },
-    { id: "program",    question: "Choose your program",                        type: "options", options: PROGRAMS },
+    { id: "program",    question: "Choose your program",                        type: "options", options: getProgramOptions(plan), lockedAction: "payment" },
     { id: "voice",      question: "Choose your voice",                          type: "options", options: VOICES },
     { id: "background", question: "Choose your background sound",               type: "options", options: BACKGROUNDS },
     { id: "length",     question: "How long would you like your session?",      type: "options", options: getLengthOptions(plan) },
@@ -255,17 +264,25 @@ function Dots() {
   );
 }
 
-function OptionList({ options, selected, onSelect }) {
+function OptionList({ options, selected, onSelect, onLockedSelect }) {
   return (
     <div style={S.optionsList}>
       {options.map((o) => {
         const sel = selected === o.value;
         const locked = !!o.locked;
+        const hasLockedAction = locked && !!onLockedSelect;
         return (
           <div
             key={o.value}
-            style={{ ...S.option(sel && !locked), opacity: locked ? 0.45 : 1, cursor: locked ? "not-allowed" : "pointer" }}
-            onClick={() => !locked && onSelect(o.value)}
+            style={{
+              ...S.option(sel && !locked),
+              opacity: locked ? 0.5 : 1,
+              cursor: locked ? (hasLockedAction ? "pointer" : "not-allowed") : "pointer",
+            }}
+            onClick={() => {
+              if (locked) { if (hasLockedAction) onLockedSelect(); }
+              else onSelect(o.value);
+            }}
           >
             <div style={S.optionIcon}>{o.icon}</div>
             <div style={{ flex: 1 }}>
@@ -273,7 +290,7 @@ function OptionList({ options, selected, onSelect }) {
               <div style={S.optionSub}>{o.sub}</div>
             </div>
             {locked
-              ? <div style={{ fontSize: "0.68rem", color: "#c9a8d8", border: "0.5px solid #c9a8d8", borderRadius: 6, padding: "0.15rem 0.45rem", flexShrink: 0, letterSpacing: "0.04em" }}>🔒 Upgrade</div>
+              ? <div style={{ fontSize: "0.68rem", color: "#c9a8d8", border: "0.5px solid #c9a8d8", borderRadius: 6, padding: "0.15rem 0.45rem", flexShrink: 0, letterSpacing: "0.04em" }}>{o.badge || "🔒 Upgrade"}</div>
               : <div style={S.check(sel)}>{sel ? "✓" : ""}</div>
             }
           </div>
@@ -937,7 +954,12 @@ export default function MindTranceformApp() {
               )}
             </>
           ) : (
-            <OptionList options={current.options} selected={form[current.id]} onSelect={(val) => { updateForm(current.id, val); setError(""); }} />
+            <OptionList
+              options={current.options}
+              selected={form[current.id]}
+              onSelect={(val) => { updateForm(current.id, val); setError(""); }}
+              onLockedSelect={current.lockedAction === "payment" ? () => setView("payment") : undefined}
+            />
           )}
           <div style={S.row}>
             <button style={S.btn} onClick={goBack}>← Back</button>
