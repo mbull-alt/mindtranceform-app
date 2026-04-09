@@ -406,13 +406,17 @@ export default function MindTranceformApp() {
         body: JSON.stringify(form),
       });
       const data = await response.json();
-      if (!response.ok || !data.success) throw new Error(typeof data.error === "string" ? data.error : "Generation failed.");
-      if (!data.script) throw new Error("No script returned from server.");
-      const audioUrl = data.audioBase64 ? `data:audio/mpeg;base64,${data.audioBase64}` : null;
-      setResult({ script: data.script, audioUrl, audioUnavailable: data.audioUnavailable });
-      setView("result");
+      // If we got a script back, always show it — even if audio failed
+      if (data.script) {
+        const audioUrl = data.audioBase64 ? `data:audio/mpeg;base64,${data.audioBase64}` : null;
+        setResult({ script: data.script, audioUrl, audioUnavailable: data.audioUnavailable || !data.audioBase64 });
+        setView("result");
+        return;
+      }
+      throw new Error(typeof data.error === "string" ? data.error : "Generation failed. Please try again.");
     } catch (e) {
       setError(e.message || "Something went wrong. Please try again.");
+      setView("genError");
     } finally {
       setGenerating(false);
     }
@@ -621,6 +625,30 @@ export default function MindTranceformApp() {
           </button>
         </div>
         <button style={S.resetBtn} onClick={handleLogout}>Log out</button>
+      </div>
+    </div>
+  );
+
+  // ── GENERATION ERROR ──
+  if (view === "genError") return (
+    <div style={S.root}>
+      <StarField />
+      <div style={S.wrap}>
+        <Logo />
+        <div style={S.card}>
+          <div style={{ textAlign: "center", padding: "1rem 0" }}>
+            <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "0.75rem" }}>
+              Something went wrong
+            </div>
+            <div style={{ fontSize: "0.85rem", color: "#8a879e", lineHeight: 1.7, marginBottom: "2rem" }}>
+              {error}
+            </div>
+            <div style={S.row}>
+              <button style={S.btn} onClick={() => setView("home")}>Home</button>
+              <button style={S.btnPrimary} onClick={generate}>Try Again ✦</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
