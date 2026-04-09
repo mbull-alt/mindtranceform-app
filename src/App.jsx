@@ -29,13 +29,41 @@ const BACKGROUNDS = [
   { value: "Ocean",       icon: "≈",   label: "Ocean",        sub: "Expansive, soothing" },
 ];
 
-const STEPS = [
-  { id: "name",       label: "1 of 5", question: "What is your name?",                        type: "input",   placeholder: "Your first name..." },
-  { id: "goal",       label: "2 of 5", question: "What do you want to let go of or achieve?", type: "input",   placeholder: "e.g. Release anxiety and sleep deeply..." },
-  { id: "program",    label: "3 of 5", question: "Choose your program",                        type: "options", options: PROGRAMS },
-  { id: "voice",      label: "4 of 5", question: "Choose your voice",                          type: "options", options: VOICES },
-  { id: "background", label: "5 of 5", question: "Choose your background sound",               type: "options", options: BACKGROUNDS },
+const DURATION_OPTIONS = {
+  premium: [
+    { value: "5",  icon: "◦", label: "5 minutes",  sub: "Quick reset" },
+    { value: "10", icon: "◎", label: "10 minutes", sub: "Full session" },
+    { value: "15", icon: "●", label: "15 minutes", sub: "Deep dive" },
+  ],
+  pro: [
+    { value: "5",  icon: "◦", label: "5 minutes",  sub: "Quick reset" },
+    { value: "10", icon: "◎", label: "10 minutes", sub: "Full session" },
+    { value: "15", icon: "●", label: "15 minutes", sub: "Deep dive" },
+    { value: "20", icon: "◉", label: "20 minutes", sub: "Extended journey" },
+    { value: "30", icon: "◈", label: "30 minutes", sub: "Complete immersion" },
+  ],
+};
+
+const PAID_PLANS = [
+  { id: "single",  label: "Single Session", price: "$14.99", period: "",    sub: "One custom session · 5 min",        accent: "#8a879e" },
+  { id: "premium", label: "Premium",        price: "$19.99", period: "/mo", sub: "Unlimited sessions · up to 15 min", accent: "#a8d8c8" },
+  { id: "pro",     label: "Pro",            price: "$29.99", period: "/mo", sub: "Unlimited sessions · up to 30 min", accent: "#c9a8d8" },
 ];
+
+function buildSteps(plan) {
+  const base = [
+    { id: "name",       question: "What is your name?",                        type: "input",   placeholder: "Your first name..." },
+    { id: "goal",       question: "What do you want to let go of or achieve?", type: "input",   placeholder: "e.g. Release anxiety and sleep deeply..." },
+    { id: "program",    question: "Choose your program",                        type: "options", options: PROGRAMS },
+    { id: "voice",      question: "Choose your voice",                          type: "options", options: VOICES },
+    { id: "background", question: "Choose your background sound",               type: "options", options: BACKGROUNDS },
+  ];
+  if (plan === "premium" || plan === "pro") {
+    base.push({ id: "duration", question: "Choose your session length", type: "options", options: DURATION_OPTIONS[plan] });
+  }
+  const total = base.length;
+  return base.map((s, i) => ({ ...s, label: `${i + 1} of ${total}` }));
+}
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const S = {
@@ -96,112 +124,65 @@ const S = {
   optionSub: { fontSize: "0.75rem", color: "#8a879e", marginTop: 1 },
   check: (selected) => ({
     marginLeft: "auto",
-    width: 18,
-    height: 18,
-    borderRadius: "50%",
+    width: 18, height: 18, borderRadius: "50%",
     border: selected ? "none" : "1.5px solid rgba(255,255,255,0.2)",
     background: selected ? "#a8d8c8" : "transparent",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: 10,
-    color: "#07091a",
-    flexShrink: 0,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    fontSize: 10, color: "#07091a", flexShrink: 0,
   }),
   row: { display: "flex", gap: "0.7rem", marginTop: "1.5rem" },
   btn: {
-    flex: 1,
-    padding: "0.8rem 1rem",
-    borderRadius: 10,
-    border: "0.5px solid rgba(255,255,255,0.18)",
-    background: "transparent",
-    color: "#e8e6f0",
-    fontFamily: "inherit",
-    fontSize: "0.88rem",
-    fontWeight: 400,
-    cursor: "pointer",
-    transition: "all 0.18s",
-    letterSpacing: "0.04em",
+    flex: 1, padding: "0.8rem 1rem", borderRadius: 10,
+    border: "0.5px solid rgba(255,255,255,0.18)", background: "transparent",
+    color: "#e8e6f0", fontFamily: "inherit", fontSize: "0.88rem",
+    fontWeight: 400, cursor: "pointer", transition: "all 0.18s", letterSpacing: "0.04em",
   },
   btnPrimary: {
-    flex: 1,
-    padding: "0.8rem 1rem",
-    borderRadius: 10,
+    flex: 1, padding: "0.8rem 1rem", borderRadius: 10,
     border: "0.5px solid #a8d8c8",
     background: "linear-gradient(135deg,rgba(168,216,200,0.2),rgba(201,168,216,0.2))",
-    color: "#a8d8c8",
-    fontFamily: "inherit",
-    fontSize: "0.88rem",
-    fontWeight: 400,
-    cursor: "pointer",
-    letterSpacing: "0.04em",
+    color: "#a8d8c8", fontFamily: "inherit", fontSize: "0.88rem",
+    fontWeight: 400, cursor: "pointer", letterSpacing: "0.04em",
   },
   errorBox: {
-    background: "rgba(220,80,80,0.1)",
-    border: "0.5px solid rgba(220,80,80,0.3)",
-    borderRadius: 12,
-    padding: "1rem 1.25rem",
-    fontSize: "0.85rem",
-    color: "#e89090",
-    marginBottom: "1rem",
-    lineHeight: 1.6,
+    background: "rgba(220,80,80,0.1)", border: "0.5px solid rgba(220,80,80,0.3)",
+    borderRadius: 12, padding: "1rem 1.25rem", fontSize: "0.85rem",
+    color: "#e89090", marginBottom: "1rem", lineHeight: 1.6,
   },
   infoBox: {
-    background: "rgba(168,216,200,0.06)",
-    border: "0.5px solid rgba(168,216,200,0.2)",
-    borderRadius: 12,
-    padding: "1rem 1.25rem",
-    fontSize: "0.85rem",
-    color: "#8a879e",
-    marginBottom: "1.25rem",
-    lineHeight: 1.6,
+    background: "rgba(168,216,200,0.06)", border: "0.5px solid rgba(168,216,200,0.2)",
+    borderRadius: 12, padding: "1rem 1.25rem", fontSize: "0.85rem",
+    color: "#8a879e", marginBottom: "1.25rem", lineHeight: 1.6,
   },
   genWrap: { textAlign: "center", padding: "2.5rem 1rem" },
   genTitle: { fontSize: "1.3rem", fontWeight: 300, marginBottom: "0.5rem", color: "#e8e6f0" },
   genSub: { fontSize: "0.75rem", color: "#8a879e", letterSpacing: "0.15em", textTransform: "uppercase" },
   scriptBox: {
-    background: "rgba(255,255,255,0.06)",
-    borderRadius: 12,
-    padding: "1.25rem",
-    fontSize: "0.88rem",
-    lineHeight: 1.8,
-    color: "#c8c5d8",
-    whiteSpace: "pre-wrap",
-    maxHeight: 300,
-    overflowY: "auto",
-    marginBottom: "1.25rem",
+    background: "rgba(255,255,255,0.06)", borderRadius: 12, padding: "1.25rem",
+    fontSize: "0.88rem", lineHeight: 1.8, color: "#c8c5d8", whiteSpace: "pre-wrap",
+    maxHeight: 300, overflowY: "auto", marginBottom: "1.25rem",
     border: "0.5px solid rgba(255,255,255,0.1)",
   },
   tagRow: { display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1.25rem" },
   tag: {
-    fontSize: "0.72rem",
-    padding: "0.3rem 0.75rem",
-    borderRadius: 20,
-    border: "0.5px solid rgba(255,255,255,0.18)",
-    color: "#8a879e",
-    letterSpacing: "0.08em",
+    fontSize: "0.72rem", padding: "0.3rem 0.75rem", borderRadius: 20,
+    border: "0.5px solid rgba(255,255,255,0.18)", color: "#8a879e", letterSpacing: "0.08em",
   },
   audio: { width: "100%", marginBottom: "0.75rem", accentColor: "#a8d8c8" },
   audioNote: { fontSize: "0.73rem", color: "#8a879e", textAlign: "center", marginBottom: "1.25rem" },
   sessionItem: {
-    background: "rgba(255,255,255,0.04)",
-    border: "0.5px solid rgba(255,255,255,0.08)",
-    borderRadius: 12,
-    padding: "0.9rem 1rem",
-    marginBottom: "0.6rem",
-    cursor: "pointer",
-    transition: "border-color 0.18s",
+    background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)",
+    borderRadius: 12, padding: "0.9rem 1rem", marginBottom: "0.6rem",
+    cursor: "pointer", transition: "border-color 0.18s",
   },
   resetBtn: {
-    background: "none",
-    border: "none",
-    color: "#8a879e",
-    fontSize: "0.8rem",
-    cursor: "pointer",
-    textDecoration: "underline",
-    fontFamily: "inherit",
-    display: "block",
-    margin: "1.25rem auto 0",
+    background: "none", border: "none", color: "#8a879e", fontSize: "0.8rem",
+    cursor: "pointer", textDecoration: "underline", fontFamily: "inherit",
+    display: "block", margin: "1.25rem auto 0",
+  },
+  freeTag: {
+    fontSize: "0.72rem", color: "#a8d8c8", letterSpacing: "0.1em",
+    textAlign: "center", marginTop: "1rem",
   },
 };
 
@@ -280,27 +261,34 @@ export default function MindTranceformApp() {
   const [authReady, setAuthReady] = useState(false);
   const [view, setView]           = useState("auth");
 
+  // Plan & usage (localStorage)
+  const [plan, setPlan]               = useState(() => localStorage.getItem("mt_plan"));
+  const [sessionsUsed, setSessionsUsed] = useState(() => parseInt(localStorage.getItem("mt_sessions_used") || "0"));
+
   // Auth form
-  const [authMode, setAuthMode]       = useState("login");
-  const [authEmail, setAuthEmail]     = useState("");
+  const [authMode, setAuthMode]         = useState("login");
+  const [authEmail, setAuthEmail]       = useState("");
   const [authPassword, setAuthPassword] = useState("");
-  const [authError, setAuthError]     = useState("");
-  const [authBusy, setAuthBusy]       = useState(false);
+  const [authError, setAuthError]       = useState("");
+  const [authBusy, setAuthBusy]         = useState(false);
 
   // Quiz
-  const [step, setStep]   = useState(0);
-  const [form, setForm]   = useState({ name: "", goal: "", program: "", voice: "", background: "" });
-  const [error, setError] = useState("");
+  const [step, setStep]     = useState(0);
+  const [form, setForm]     = useState({ name: "", goal: "", program: "", voice: "", background: "", duration: "5" });
+  const [error, setError]   = useState("");
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState(null);
-
-  // Sessions
   const [genStep, setGenStep] = useState(0);
 
-  const [sessions, setSessions]             = useState([]);
+  // Sessions
+  const [sessions, setSessions]               = useState([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
 
+  // Dynamic steps based on plan
+  const steps = buildSteps(plan);
+
+  // Inject keyframe animations
   useEffect(() => {
     const style = document.createElement("style");
     style.textContent = `
@@ -312,6 +300,7 @@ export default function MindTranceformApp() {
     return () => document.head.removeChild(style);
   }, []);
 
+  // Progress steps timer
   useEffect(() => {
     if (!generating) { setGenStep(0); return; }
     const t1 = setTimeout(() => setGenStep(1), 3500);
@@ -319,17 +308,36 @@ export default function MindTranceformApp() {
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [generating]);
 
+  // Auth state + Stripe return handling
   useEffect(() => {
+    // Handle Stripe success redirect
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("payment") === "success") {
+      const newPlan = params.get("plan");
+      if (newPlan) {
+        localStorage.setItem("mt_plan", newPlan);
+        setPlan(newPlan);
+      }
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       setView(session?.user ? "home" : "auth");
       setAuthReady(true);
+      // Mark subscriber in backend after Stripe redirect
+      if (params.get("payment") === "success" && session?.user) {
+        fetch(`${BACKEND_URL}/user/subscribe`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).catch(() => {});
+      }
     });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       setUser(session?.user ?? null);
       setView(session?.user ? "home" : "auth");
       if (session?.user) {
-        // Register profile + trigger welcome email for new users (idempotent)
         fetch(`${BACKEND_URL}/user/register`, {
           method: "POST",
           headers: { Authorization: `Bearer ${session.access_token}` },
@@ -362,19 +370,32 @@ export default function MindTranceformApp() {
   async function handleLogout() {
     await supabase.auth.signOut();
     setStep(0);
-    setForm({ name: "", goal: "", program: "", voice: "", background: "" });
+    setForm({ name: "", goal: "", program: "", voice: "", background: "", duration: "5" });
     setResult(null);
     setSessions([]);
     setSelectedSession(null);
+  }
+
+  async function startCheckout(planId) {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/create-checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ plan: planId, email: user?.email }),
+      });
+      const data = await res.json();
+      if (data.checkoutUrl) window.location.href = data.checkoutUrl;
+    } catch (e) {
+      console.error("Checkout error:", e);
+    }
   }
 
   async function fetchSessions() {
     setSessionsLoading(true);
     try {
       const token = await getToken();
-      const res = await fetch(`${BACKEND_URL}/sessions`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${BACKEND_URL}/sessions`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       setSessions(data.sessions || []);
     } catch {}
@@ -384,16 +405,12 @@ export default function MindTranceformApp() {
   async function openSession(id) {
     try {
       const token = await getToken();
-      const res = await fetch(`${BACKEND_URL}/sessions/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${BACKEND_URL}/sessions/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (data.session) {
         setSelectedSession({
           ...data.session,
-          audioUrl: data.session.audioBase64
-            ? `data:audio/mpeg;base64,${data.session.audioBase64}`
-            : null,
+          audioUrl: data.session.audioBase64 ? `data:audio/mpeg;base64,${data.session.audioBase64}` : null,
         });
         setView("sessionDetail");
       }
@@ -403,18 +420,28 @@ export default function MindTranceformApp() {
   function updateForm(key, val) { setForm((f) => ({ ...f, [key]: val })); }
 
   async function generate() {
+    // Free session limit: null plan = free tier, 1 session lifetime
+    if (!plan && sessionsUsed >= 1) {
+      setView("payment");
+      return;
+    }
+
     setGenerating(true);
     setError("");
     try {
       const token = await getToken();
+      const duration = plan === "pro" || plan === "premium" ? (form.duration || "5") : "5";
       const response = await fetch(`${BACKEND_URL}/generate-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, duration }),
       });
       const data = await response.json();
-      // If we got a script back, always show it — even if audio failed
       if (data.script) {
+        // Increment usage counter
+        const newUsed = sessionsUsed + 1;
+        localStorage.setItem("mt_sessions_used", String(newUsed));
+        setSessionsUsed(newUsed);
         const audioUrl = data.audioBase64 ? `data:audio/mpeg;base64,${data.audioBase64}` : null;
         setResult({ script: data.script, audioUrl, audioUnavailable: data.audioUnavailable || !data.audioBase64 });
         setView("result");
@@ -430,14 +457,14 @@ export default function MindTranceformApp() {
   }
 
   function goNext() {
-    const s = STEPS[step];
+    const s = steps[step];
     if (s.type === "input") {
       if (!form[s.id].trim()) { setError("Please fill this in to continue."); return; }
     } else {
       if (!form[s.id]) { setError("Please choose an option."); return; }
     }
     setError("");
-    if (step < STEPS.length - 1) setStep((p) => p + 1);
+    if (step < steps.length - 1) setStep((p) => p + 1);
     else generate();
   }
 
@@ -460,9 +487,7 @@ export default function MindTranceformApp() {
             {authMode === "login" ? "Welcome back" : "Create your account"}
           </div>
           {authError && (
-            <div style={authError.includes("Check your email") ? S.infoBox : S.errorBox}>
-              {authError}
-            </div>
+            <div style={authError.includes("Check your email") ? S.infoBox : S.errorBox}>{authError}</div>
           )}
           <form onSubmit={handleAuth}>
             <input style={{ ...S.input, marginBottom: "0.75rem" }} type="email" placeholder="Email"
@@ -473,6 +498,7 @@ export default function MindTranceformApp() {
               {authBusy ? "..." : authMode === "login" ? "Log In" : "Create Account"}
             </button>
           </form>
+          <div style={S.freeTag}>✦ Your first session is free. No card needed.</div>
           <div style={{ textAlign: "center", marginTop: "1rem" }}>
             <button style={S.resetBtn} onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthError(""); }}>
               {authMode === "login" ? "No account? Sign up" : "Already have an account? Log in"}
@@ -508,8 +534,7 @@ export default function MindTranceformApp() {
                     display: "flex", alignItems: "center", justifyContent: "center",
                     border: i < genStep ? "none" : "1.5px solid rgba(168,216,200,0.4)",
                     background: i < genStep ? "#a8d8c8" : "transparent",
-                    fontSize: 11, color: "#07091a",
-                    transition: "all 0.4s ease",
+                    fontSize: 11, color: "#07091a", transition: "all 0.4s ease",
                   }}>
                     {i < genStep ? "✓" : ""}
                   </div>
@@ -561,6 +586,44 @@ export default function MindTranceformApp() {
     );
   }
 
+  // ── PAYMENT / UPGRADE ──
+  if (view === "payment") return (
+    <div style={S.root}>
+      <StarField />
+      <div style={S.wrap}>
+        <Logo />
+        <div style={S.card}>
+          <div style={{ fontSize: "1.4rem", fontWeight: 300, marginBottom: "0.5rem" }}>
+            You've used your free session
+          </div>
+          <div style={{ fontSize: "0.88rem", color: "#8a879e", lineHeight: 1.7, marginBottom: "0.5rem" }}>
+            Upgrade to generate unlimited personalized sessions.
+          </div>
+          <div style={S.freeTag}>✦ Your first session is free. No card needed.</div>
+          <div style={{ height: "1.5rem" }} />
+          {PAID_PLANS.map((p) => (
+            <div key={p.id} style={{ ...S.sessionItem, padding: "1.1rem 1.25rem", marginBottom: "0.75rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.3rem" }}>
+                <div style={{ fontSize: "1rem", color: "#e8e6f0" }}>{p.label}</div>
+                <div style={{ fontSize: "1.05rem", color: p.accent }}>
+                  {p.price}<span style={{ fontSize: "0.72rem", color: "#8a879e" }}>{p.period}</span>
+                </div>
+              </div>
+              <div style={{ fontSize: "0.78rem", color: "#8a879e", marginBottom: "0.85rem" }}>{p.sub}</div>
+              <button
+                style={{ ...S.btnPrimary, width: "100%", borderColor: p.accent, color: p.accent }}
+                onClick={() => startCheckout(p.id)}
+              >
+                Choose {p.label} →
+              </button>
+            </div>
+          ))}
+        </div>
+        <button style={S.resetBtn} onClick={() => setView("home")}>← Back to home</button>
+      </div>
+    </div>
+  );
+
   // ── SESSIONS LIST ──
   if (view === "sessions") return (
     <div style={S.root}>
@@ -596,13 +659,32 @@ export default function MindTranceformApp() {
           <div style={{ fontSize: "0.75rem", color: "#8a879e", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "1.25rem" }}>
             {selectedSession.program} · {selectedSession.voice}
           </div>
-          {selectedSession.audioUrl
-            ? <><audio controls style={S.audio} src={selectedSession.audioUrl} /><div style={S.audioNote}>Your personalized audio session</div></>
-            : null
+          {selectedSession.audioUrl &&
+            <><audio controls style={S.audio} src={selectedSession.audioUrl} /><div style={S.audioNote}>Your personalized audio session</div></>
           }
           <div style={S.scriptBox}>{selectedSession.script}</div>
         </div>
         <button style={S.resetBtn} onClick={() => { setSelectedSession(null); setView("sessions"); }}>← Back to sessions</button>
+      </div>
+    </div>
+  );
+
+  // ── GENERATION ERROR ──
+  if (view === "genError") return (
+    <div style={S.root}>
+      <StarField />
+      <div style={S.wrap}>
+        <Logo />
+        <div style={S.card}>
+          <div style={{ textAlign: "center", padding: "1rem 0" }}>
+            <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "0.75rem" }}>Something went wrong</div>
+            <div style={{ fontSize: "0.85rem", color: "#8a879e", lineHeight: 1.7, marginBottom: "2rem" }}>{error}</div>
+            <div style={S.row}>
+              <button style={S.btn} onClick={() => setView("home")}>Home</button>
+              <button style={S.btnPrimary} onClick={generate}>Try Again ✦</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -620,49 +702,38 @@ export default function MindTranceformApp() {
           <div style={{ fontSize: "0.78rem", color: "#8a879e", marginBottom: "2rem" }}>{user?.email}</div>
           <button
             style={{ ...S.btnPrimary, width: "100%", padding: "1rem", marginBottom: "0.75rem", fontSize: "1rem" }}
-            onClick={() => { setStep(0); setForm({ name: "", goal: "", program: "", voice: "", background: "" }); setError(""); setResult(null); setView("quiz"); }}
+            onClick={() => { setStep(0); setForm({ name: "", goal: "", program: "", voice: "", background: "", duration: "5" }); setError(""); setResult(null); setView("quiz"); }}
           >
             ✦ New Session
           </button>
-          <button
-            style={{ ...S.btn, width: "100%", padding: "1rem" }}
-            onClick={() => { setView("sessions"); fetchSessions(); }}
-          >
+          <button style={{ ...S.btn, width: "100%", padding: "1rem" }} onClick={() => { setView("sessions"); fetchSessions(); }}>
             My Sessions
           </button>
+          {!plan && sessionsUsed === 0 && (
+            <div style={S.freeTag}>✦ Your first session is free. No card needed.</div>
+          )}
+          {!plan && sessionsUsed >= 1 && (
+            <div style={{ ...S.freeTag, color: "#8a879e", marginTop: "1rem" }}>
+              Free session used —{" "}
+              <span style={{ color: "#a8d8c8", cursor: "pointer", textDecoration: "underline" }} onClick={() => setView("payment")}>
+                upgrade to continue
+              </span>
+            </div>
+          )}
+          {plan && (
+            <div style={{ ...S.freeTag, color: "#8a879e", marginTop: "1rem", textTransform: "capitalize" }}>
+              Plan: <span style={{ color: "#a8d8c8" }}>{plan}</span>
+            </div>
+          )}
         </div>
         <button style={S.resetBtn} onClick={handleLogout}>Log out</button>
       </div>
     </div>
   );
 
-  // ── GENERATION ERROR ──
-  if (view === "genError") return (
-    <div style={S.root}>
-      <StarField />
-      <div style={S.wrap}>
-        <Logo />
-        <div style={S.card}>
-          <div style={{ textAlign: "center", padding: "1rem 0" }}>
-            <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "0.75rem" }}>
-              Something went wrong
-            </div>
-            <div style={{ fontSize: "0.85rem", color: "#8a879e", lineHeight: 1.7, marginBottom: "2rem" }}>
-              {error}
-            </div>
-            <div style={S.row}>
-              <button style={S.btn} onClick={() => setView("home")}>Home</button>
-              <button style={S.btnPrimary} onClick={generate}>Try Again ✦</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   // ── QUIZ ──
-  const current = STEPS[step];
-  const pct = (step / STEPS.length) * 100;
+  const current = steps[step];
+  const pct = (step / steps.length) * 100;
   return (
     <div style={S.root}>
       <StarField />
@@ -688,7 +759,7 @@ export default function MindTranceformApp() {
           <div style={S.row}>
             <button style={S.btn} onClick={goBack}>← Back</button>
             <button style={S.btnPrimary} onClick={goNext}>
-              {step < STEPS.length - 1 ? "Continue →" : "Generate My Session ✦"}
+              {step < steps.length - 1 ? "Continue →" : "Generate My Session ✦"}
             </button>
           </div>
         </div>
