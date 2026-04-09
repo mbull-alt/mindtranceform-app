@@ -272,6 +272,11 @@ export default function MindTranceformApp() {
   const [authError, setAuthError]       = useState("");
   const [authBusy, setAuthBusy]         = useState(false);
 
+  // Safety
+  const [safetyAccepted, setSafetyAccepted] = useState(() => !!localStorage.getItem("mt_safety_accepted"));
+  const [safetyChecked, setSafetyChecked]   = useState(false);
+  const [safetyReturn, setSafetyReturn]     = useState("home"); // "generate" | "home"
+
   // Quiz
   const [step, setStep]     = useState(0);
   const [form, setForm]     = useState({ name: "", goal: "", program: "", voice: "", background: "", duration: "5" });
@@ -312,7 +317,8 @@ export default function MindTranceformApp() {
   useEffect(() => {
     // Handle Stripe success redirect
     const params = new URLSearchParams(window.location.search);
-    if (params.get("payment") === "success") {
+    const isPaymentSuccess = params.get("payment") === "success";
+    if (isPaymentSuccess) {
       const newPlan = params.get("plan");
       if (newPlan) {
         localStorage.setItem("mt_plan", newPlan);
@@ -323,10 +329,15 @@ export default function MindTranceformApp() {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      setView(session?.user ? "home" : "auth");
+      // After payment, show safety screen if not yet accepted
+      if (isPaymentSuccess && session?.user && !localStorage.getItem("mt_safety_accepted")) {
+        setSafetyReturn("home");
+        setView("safety");
+      } else {
+        setView(session?.user ? "home" : "auth");
+      }
       setAuthReady(true);
-      // Mark subscriber in backend after Stripe redirect
-      if (params.get("payment") === "success" && session?.user) {
+      if (isPaymentSuccess && session?.user) {
         fetch(`${BACKEND_URL}/user/subscribe`, {
           method: "POST",
           headers: { Authorization: `Bearer ${session.access_token}` },
@@ -376,6 +387,14 @@ export default function MindTranceformApp() {
     setSelectedSession(null);
   }
 
+  function acceptSafety() {
+    localStorage.setItem("mt_safety_accepted", "1");
+    setSafetyAccepted(true);
+    setSafetyChecked(false);
+    if (safetyReturn === "generate") generate();
+    else setView("home");
+  }
+
   async function startCheckout(planId) {
     try {
       const token = await getToken();
@@ -423,6 +442,12 @@ export default function MindTranceformApp() {
     // Free session limit: null plan = free tier, 1 session lifetime
     if (!plan && sessionsUsed >= 1) {
       setView("payment");
+      return;
+    }
+    // Safety disclaimer must be accepted before first generation
+    if (!safetyAccepted) {
+      setSafetyReturn("generate");
+      setView("safety");
       return;
     }
 
@@ -624,6 +649,92 @@ export default function MindTranceformApp() {
     </div>
   );
 
+  // ── SAFETY DISCLAIMER ──
+  if (view === "safety") {
+    const sec = (title, items, color = "#c8c5d8") => (
+      <div style={{ marginBottom: "1.5rem" }}>
+        <div style={{ fontSize: "0.7rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#8a879e", marginBottom: "0.6rem" }}>{title}</div>
+        {items.map((item, i) => (
+          <div key={i} style={{ display: "flex", gap: "0.6rem", marginBottom: "0.4rem", alignItems: "flex-start" }}>
+            <span style={{ color: "#a8d8c8", flexShrink: 0, marginTop: "0.05rem" }}>◦</span>
+            <span style={{ fontSize: "0.88rem", color, lineHeight: 1.6 }}>{item}</span>
+          </div>
+        ))}
+      </div>
+    );
+    return (
+      <div style={S.root}>
+        <StarField />
+        <div style={S.wrap}>
+          <Logo />
+          <div style={S.card}>
+            <div style={{ fontSize: "1.6rem", fontWeight: 300, marginBottom: "0.4rem" }}>Before You Listen</div>
+            <div style={{ height: "0.5px", background: "rgba(255,255,255,0.08)", margin: "1rem 0 1.5rem" }} />
+
+            {sec("Best times to listen", [
+              "Before sleep — lying in bed with eyes closed",
+              "Morning — before getting out of bed",
+              "During meditation — seated comfortably in a quiet space",
+              "During rest — lying down on a couch or mat",
+              "During a break — somewhere quiet with no distractions",
+            ])}
+
+            {sec("For best results", [
+              "Use headphones or earbuds for the most immersive experience",
+              "Find a quiet space where you will not be interrupted",
+              "Close your eyes during the session",
+              "Listen at a comfortable volume",
+              "Give yourself time to return to full alertness afterward before resuming activity",
+              "Listen consistently — daily use produces the best results over time",
+            ])}
+
+            {sec("Do not listen while", [
+              "Driving or operating any vehicle",
+              "Operating machinery or equipment",
+              "Caring for children or others who depend on you",
+              "In any situation where you need to remain fully alert",
+              "Standing or walking",
+            ], "#e89090")}
+
+            <div style={{ ...S.infoBox, marginBottom: "1.5rem" }}>
+              <div style={{ fontSize: "0.7rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#8a879e", marginBottom: "0.5rem" }}>Important notice</div>
+              Mind Tranceform is designed for relaxation, personal development, and wellness purposes only. It is not medical, psychological, or therapeutic treatment and is not a substitute for professional care. If you have a medical or mental health condition, consult your doctor before use. Do not use as a replacement for prescribed treatment or medication.
+            </div>
+
+            {/* Checkbox */}
+            <div
+              style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "1.5rem" }}
+              onClick={() => setSafetyChecked((v) => !v)}
+            >
+              <div style={{
+                width: 20, height: 20, borderRadius: 5, flexShrink: 0, marginTop: 2,
+                border: safetyChecked ? "none" : "1.5px solid rgba(168,216,200,0.4)",
+                background: safetyChecked ? "#a8d8c8" : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 12, color: "#07091a", transition: "all 0.2s",
+              }}>
+                {safetyChecked ? "✓" : ""}
+              </div>
+              <span style={{ fontSize: "0.88rem", color: "#c8c5d8", lineHeight: 1.6 }}>
+                I understand and agree to use Mind Tranceform safely
+              </span>
+            </div>
+
+            <button
+              style={{ ...S.btnPrimary, width: "100%", opacity: safetyChecked ? 1 : 0.4, cursor: safetyChecked ? "pointer" : "not-allowed" }}
+              onClick={() => safetyChecked && acceptSafety()}
+            >
+              {safetyReturn === "generate" ? "Continue to My Session ✦" : "Got It"}
+            </button>
+          </div>
+          {safetyReturn === "home" && (
+            <button style={S.resetBtn} onClick={() => setView("home")}>← Back to home</button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   // ── SESSIONS LIST ──
   if (view === "sessions") return (
     <div style={S.root}>
@@ -726,6 +837,7 @@ export default function MindTranceformApp() {
             </div>
           )}
         </div>
+        <button style={S.resetBtn} onClick={() => { setSafetyReturn("home"); setView("safety"); }}>How to use</button>
         <button style={S.resetBtn} onClick={handleLogout}>Log out</button>
       </div>
     </div>
