@@ -29,20 +29,28 @@ const BACKGROUNDS = [
   { value: "Ocean",       icon: "≈",   label: "Ocean",        sub: "Expansive, soothing" },
 ];
 
-const DURATION_OPTIONS = {
-  premium: [
-    { value: "5",  icon: "◦", label: "5 minutes",  sub: "Quick reset" },
-    { value: "10", icon: "◎", label: "10 minutes", sub: "Full session" },
-    { value: "15", icon: "●", label: "15 minutes", sub: "Deep dive" },
-  ],
-  pro: [
-    { value: "5",  icon: "◦", label: "5 minutes",  sub: "Quick reset" },
-    { value: "10", icon: "◎", label: "10 minutes", sub: "Full session" },
-    { value: "15", icon: "●", label: "15 minutes", sub: "Deep dive" },
-    { value: "20", icon: "◉", label: "20 minutes", sub: "Extended journey" },
-    { value: "30", icon: "◈", label: "30 minutes", sub: "Complete immersion" },
-  ],
-};
+function getLengthOptions(plan) {
+  const rank = { null: 0, undefined: 0, single: 1, premium: 2, pro: 3 }[plan] ?? 0;
+  return [
+    { value: "5",  icon: "◦", label: "5 minutes",  sub: "Quick reset",          locked: false },
+    { value: "10", icon: "◎", label: "10 minutes", sub: "Full session",          locked: rank < 2 },
+    { value: "15", icon: "●", label: "15 minutes", sub: "Deep dive",             locked: rank < 2 },
+    { value: "20", icon: "◉", label: "20 minutes", sub: "Extended journey",      locked: rank < 3 },
+    { value: "30", icon: "◈", label: "30 minutes", sub: "Complete immersion",    locked: rank < 3 },
+  ];
+}
+
+function getStyleOptions(plan) {
+  const isFree = !plan;
+  return [
+    { value: "Gentle Meditation", icon: "◌",   label: "Gentle Meditation", sub: "Soft, calming guidance",         locked: false },
+    { value: "Deep Hypnosis",     icon: "●",   label: "Deep Hypnosis",     sub: "Profound trance induction",      locked: false },
+    { value: "Affirmations Only", icon: "◎",   label: "Affirmations Only", sub: "Pure positive programming",      locked: false },
+    { value: "Visualization",     icon: "◈",   label: "Visualization",     sub: "Vivid mental imagery",           locked: false },
+    { value: "Sleep Induction",   icon: "Zzz", label: "Sleep Induction",   sub: "Drift into deep sleep",          locked: isFree },
+    { value: "Confidence Boost",  icon: "✦",   label: "Confidence Boost",  sub: "Expand your inner power",        locked: isFree },
+  ];
+}
 
 const PAID_PLANS = [
   { id: "single",  label: "Single Session", price: "$14.99", period: "",    sub: "One custom session · 5 min",        accent: "#8a879e" },
@@ -50,19 +58,40 @@ const PAID_PLANS = [
   { id: "pro",     label: "Pro",            price: "$29.99", period: "/mo", sub: "Unlimited sessions · up to 30 min", accent: "#c9a8d8" },
 ];
 
+const EMPTY_FORM = {
+  name: "", goal: "", program: "", voice: "", background: "",
+  length: "5", style: "", personalization: "standard",
+  fears: "", motivation: "", idealLife: "",
+  affirmationStyle: "", backgroundIntensity: "",
+};
+
 function buildSteps(plan) {
-  const base = [
+  const steps = [
     { id: "name",       question: "What is your name?",                        type: "input",   placeholder: "Your first name..." },
     { id: "goal",       question: "What do you want to let go of or achieve?", type: "input",   placeholder: "e.g. Release anxiety and sleep deeply..." },
     { id: "program",    question: "Choose your program",                        type: "options", options: PROGRAMS },
     { id: "voice",      question: "Choose your voice",                          type: "options", options: VOICES },
     { id: "background", question: "Choose your background sound",               type: "options", options: BACKGROUNDS },
+    { id: "length",     question: "How long would you like your session?",      type: "options", options: getLengthOptions(plan) },
+    { id: "style",      question: "Choose your session style",                  type: "options", options: getStyleOptions(plan) },
+    { id: "personalization", question: "How deeply personalized should your session be?", type: "personalization", options: [
+      { value: "standard", icon: "◎", label: "Standard",     sub: "Personalized to your name and goal" },
+      { value: "deep",     icon: "●", label: "Deep Personal", sub: "Tailored to your inner world" },
+    ]},
+    { id: "affirmationStyle", question: "How would you like your affirmations?", type: "options", options: [
+      { value: "I am",          icon: "◦", label: "I am...",       sub: "First person — powerful ownership" },
+      { value: "You are",       icon: "◎", label: "You are...",    sub: "Second person — like a trusted guide" },
+      { value: "Present tense", icon: "●", label: "Present tense", sub: "As if it's already true" },
+      { value: "Future tense",  icon: "◈", label: "Future tense",  sub: "Planting seeds of what's to come" },
+    ]},
+    { id: "backgroundIntensity", question: "How prominent should the background sound be?", type: "options", options: [
+      { value: "Subtle",    icon: "◦", label: "Subtle",    sub: "Barely there — voice is the focus" },
+      { value: "Balanced",  icon: "◎", label: "Balanced",  sub: "Equal blend of voice and sound" },
+      { value: "Immersive", icon: "●", label: "Immersive", sub: "Rich soundscape, deeply enveloping" },
+    ]},
   ];
-  if (plan === "premium" || plan === "pro") {
-    base.push({ id: "duration", question: "Choose your session length", type: "options", options: DURATION_OPTIONS[plan] });
-  }
-  const total = base.length;
-  return base.map((s, i) => ({ ...s, label: `${i + 1} of ${total}` }));
+  const total = steps.length;
+  return steps.map((s, i) => ({ ...s, label: `${i + 1} of ${total}` }));
 }
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
@@ -231,14 +260,22 @@ function OptionList({ options, selected, onSelect }) {
     <div style={S.optionsList}>
       {options.map((o) => {
         const sel = selected === o.value;
+        const locked = !!o.locked;
         return (
-          <div key={o.value} style={S.option(sel)} onClick={() => onSelect(o.value)}>
+          <div
+            key={o.value}
+            style={{ ...S.option(sel && !locked), opacity: locked ? 0.45 : 1, cursor: locked ? "not-allowed" : "pointer" }}
+            onClick={() => !locked && onSelect(o.value)}
+          >
             <div style={S.optionIcon}>{o.icon}</div>
-            <div>
+            <div style={{ flex: 1 }}>
               <div style={S.optionLabel}>{o.label}</div>
               <div style={S.optionSub}>{o.sub}</div>
             </div>
-            <div style={S.check(sel)}>{sel ? "✓" : ""}</div>
+            {locked
+              ? <div style={{ fontSize: "0.68rem", color: "#c9a8d8", border: "0.5px solid #c9a8d8", borderRadius: 6, padding: "0.15rem 0.45rem", flexShrink: 0, letterSpacing: "0.04em" }}>🔒 Upgrade</div>
+              : <div style={S.check(sel)}>{sel ? "✓" : ""}</div>
+            }
           </div>
         );
       })}
@@ -279,7 +316,7 @@ export default function MindTranceformApp() {
 
   // Quiz
   const [step, setStep]     = useState(0);
-  const [form, setForm]     = useState({ name: "", goal: "", program: "", voice: "", background: "", duration: "5" });
+  const [form, setForm]     = useState(EMPTY_FORM);
   const [error, setError]   = useState("");
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState(null);
@@ -381,7 +418,7 @@ export default function MindTranceformApp() {
   async function handleLogout() {
     await supabase.auth.signOut();
     setStep(0);
-    setForm({ name: "", goal: "", program: "", voice: "", background: "", duration: "5" });
+    setForm(EMPTY_FORM);
     setResult(null);
     setSessions([]);
     setSelectedSession(null);
@@ -455,11 +492,24 @@ export default function MindTranceformApp() {
     setError("");
     try {
       const token = await getToken();
-      const duration = plan === "pro" || plan === "premium" ? (form.duration || "5") : "5";
       const response = await fetch(`${BACKEND_URL}/generate-session`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ ...form, duration }),
+        body: JSON.stringify({
+          name: form.name,
+          goal: form.goal,
+          program: form.program,
+          voice: form.voice,
+          background: form.background,
+          length: form.length,
+          style: form.style,
+          personalization: form.personalization,
+          fears: form.fears,
+          motivation: form.motivation,
+          idealLife: form.idealLife,
+          affirmationStyle: form.affirmationStyle,
+          backgroundIntensity: form.backgroundIntensity,
+        }),
       });
       const data = await response.json();
       if (data.script) {
@@ -485,6 +535,13 @@ export default function MindTranceformApp() {
     const s = steps[step];
     if (s.type === "input") {
       if (!form[s.id].trim()) { setError("Please fill this in to continue."); return; }
+    } else if (s.type === "personalization") {
+      if (!form[s.id]) { setError("Please choose an option."); return; }
+      if (form.personalization === "deep") {
+        if (!form.fears.trim() || !form.motivation.trim() || !form.idealLife.trim()) {
+          setError("Please fill in all three fields to continue."); return;
+        }
+      }
     } else {
       if (!form[s.id]) { setError("Please choose an option."); return; }
     }
@@ -813,7 +870,7 @@ export default function MindTranceformApp() {
           <div style={{ fontSize: "0.78rem", color: "#8a879e", marginBottom: "2rem" }}>{user?.email}</div>
           <button
             style={{ ...S.btnPrimary, width: "100%", padding: "1rem", marginBottom: "0.75rem", fontSize: "1rem" }}
-            onClick={() => { setStep(0); setForm({ name: "", goal: "", program: "", voice: "", background: "", duration: "5" }); setError(""); setResult(null); setView("quiz"); }}
+            onClick={() => { setStep(0); setForm(EMPTY_FORM); setError(""); setResult(null); setView("quiz"); }}
           >
             ✦ New Session
           </button>
@@ -865,6 +922,20 @@ export default function MindTranceformApp() {
               onChange={(e) => { updateForm(current.id, e.target.value); setError(""); }}
               onKeyDown={(e) => { if (e.key === "Enter") goNext(); }}
             />
+          ) : current.type === "personalization" ? (
+            <>
+              <OptionList options={current.options} selected={form[current.id]} onSelect={(val) => { updateForm(current.id, val); setError(""); }} />
+              {form.personalization === "deep" && (
+                <div style={{ marginTop: "1.25rem", display: "grid", gap: "0.6rem" }}>
+                  <input style={S.input} type="text" placeholder="What are you afraid of or holding onto?" value={form.fears}
+                    onChange={(e) => { updateForm("fears", e.target.value); setError(""); }} />
+                  <input style={S.input} type="text" placeholder="What truly motivates you?" value={form.motivation}
+                    onChange={(e) => { updateForm("motivation", e.target.value); setError(""); }} />
+                  <input style={S.input} type="text" placeholder="Describe your ideal life in one sentence" value={form.idealLife}
+                    onChange={(e) => { updateForm("idealLife", e.target.value); setError(""); }} />
+                </div>
+              )}
+            </>
           ) : (
             <OptionList options={current.options} selected={form[current.id]} onSelect={(val) => { updateForm(current.id, val); setError(""); }} />
           )}
