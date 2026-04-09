@@ -300,7 +300,7 @@ export default function MindTranceformApp() {
       const audioUrl = data.audioBase64
         ? `data:audio/mpeg;base64,${data.audioBase64}`
         : null;
-      setResult({ script: data.script, audioUrl });
+      setResult({ script: data.script, audioUrl, audioUnavailable: data.audioUnavailable });
     } catch (e) {
       setError(e.message || "Something went wrong. Please try again.");
     } finally {
@@ -368,7 +368,9 @@ export default function MindTranceformApp() {
 
             {!result.audioUrl && (
               <div style={{ ...S.errorBox, background: "rgba(168,216,200,0.06)", borderColor: "rgba(168,216,200,0.2)", color: "#8a879e" }}>
-                Audio voice generation requires your ElevenLabs API key on the backend. Your personalized script is below — it is ready to be read or converted to audio.
+                {result.audioUnavailable
+                  ? "Audio is temporarily unavailable — your personalized script is ready below."
+                  : "Your personalized script is ready below."}
               </div>
             )}
 
