@@ -679,6 +679,25 @@ export default function MindTranceformApp() {
               <button style={S.btn} onClick={() => setView("home")}>Home</button>
               <button style={S.btnPrimary} onClick={generate}>✦ Regenerate</button>
             </div>
+            <div style={{ ...S.row, marginTop: "0.5rem" }}>
+              {result.audioUrl && (
+                <button style={S.btn} onClick={() => {
+                  const a = document.createElement("a");
+                  a.href = result.audioUrl;
+                  a.download = `${form.program || "session"}.mp3`;
+                  a.click();
+                }}>↓ Download Audio</button>
+              )}
+              <button style={S.btn} onClick={() => {
+                const blob = new Blob([result.script], { type: "text/plain" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${form.program || "session"} — script.txt`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}>↓ Download Script</button>
+            </div>
           </div>
         </div>
       </div>
@@ -848,6 +867,25 @@ export default function MindTranceformApp() {
             <><audio controls style={S.audio} src={selectedSession.audioUrl} /><div style={S.audioNote}>Your personalized audio session</div></>
           }
           <div style={S.scriptBox}>{selectedSession.script}</div>
+          <div style={S.row}>
+            {selectedSession.audioUrl && (
+              <button style={S.btn} onClick={() => {
+                const a = document.createElement("a");
+                a.href = selectedSession.audioUrl;
+                a.download = `${selectedSession.title || "session"}.mp3`;
+                a.click();
+              }}>↓ Download Audio</button>
+            )}
+            <button style={S.btn} onClick={() => {
+              const blob = new Blob([selectedSession.script], { type: "text/plain" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `${selectedSession.title || "session"} — script.txt`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}>↓ Download Script</button>
+          </div>
         </div>
         <button style={S.resetBtn} onClick={() => { setSelectedSession(null); setView("sessions"); }}>← Back to sessions</button>
       </div>
