@@ -1273,7 +1273,7 @@ export default function MindTranceformApp() {
           <button style={{ ...S.btn, width: "100%", padding: "1rem", marginBottom: "0.75rem" }} onClick={() => { setView("sessions"); fetchSessions(); }}>
             My Sessions
           </button>
-          <button style={{ ...S.btn, width: "100%", padding: "1rem" }} onClick={() => { setView("account"); fetchSubStatus(); }}>
+          <button style={{ ...S.btn, width: "100%", padding: "1rem" }} onClick={() => { setView("account"); fetchSubStatus(); setCancelConfirm(false); }}>
             Account
           </button>
           {!plan && sessionsUsed === 0 && (
@@ -1291,7 +1291,7 @@ export default function MindTranceformApp() {
             <div style={{ ...S.freeTag, color: "#8a879e", marginTop: "1rem", textTransform: "capitalize" }}>
               Plan: <span
                 style={{ color: "#a8d8c8", cursor: "pointer", textDecoration: "underline" }}
-                onClick={() => { setView("account"); fetchSubStatus(); }}
+                onClick={() => { setView("account"); fetchSubStatus(); setCancelConfirm(false); }}
               >{plan}</span>
             </div>
           )}
