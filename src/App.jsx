@@ -369,6 +369,12 @@ export default function MindTranceformApp() {
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
 
+  // Account / subscription
+  const [welcomeMsg, setWelcomeMsg]       = useState("");
+  const [subStatus, setSubStatus]         = useState(null);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  const [cancelling, setCancelling]       = useState(false);
+
   // Dynamic steps based on plan
   const steps = buildSteps(plan);
 
@@ -402,6 +408,8 @@ export default function MindTranceformApp() {
       if (newPlan) {
         localStorage.setItem("mt_plan", newPlan);
         setPlan(newPlan);
+        const planLabel = { single: "Single Session", premium: "Premium", pro: "Pro" }[newPlan] || newPlan;
+        setWelcomeMsg(`Welcome to Mind Tranceform ${planLabel}. Your personalized sessions are ready.`);
       }
       window.history.replaceState({}, "", window.location.pathname);
     }
@@ -513,6 +521,34 @@ export default function MindTranceformApp() {
         setView("sessionDetail");
       }
     } catch {}
+  }
+
+  async function fetchSubStatus() {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/subscription-status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) setSubStatus(data);
+    } catch {}
+  }
+
+  async function cancelSubscription() {
+    setCancelling(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/cancel-subscription`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSubStatus((s) => ({ ...s, status: "cancelling" }));
+        setCancelConfirm(false);
+      }
+    } catch {}
+    setCancelling(false);
   }
 
   function updateForm(key, val) { setForm((f) => ({ ...f, [key]: val })); }
@@ -988,6 +1024,110 @@ export default function MindTranceformApp() {
     </div>
   );
 
+  // ── ACCOUNT ──
+  if (view === "account") {
+    const planMeta = {
+      single:  { label: "Single Session", price: "$14.99",       period: "one-time", accent: "#8a879e" },
+      premium: { label: "Premium",         price: "$19.99/mo",    period: "monthly",  accent: "#a8d8c8" },
+      pro:     { label: "Pro",             price: "$29.99/mo",    period: "monthly",  accent: "#c9a8d8" },
+    };
+    const current = plan ? planMeta[plan] : null;
+    const isCancelling = subStatus?.status === "cancelling";
+    const isPastDue    = subStatus?.status === "past_due";
+    const nextDate = subStatus?.nextBillingDate
+      ? new Date(subStatus.nextBillingDate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+      : null;
+    const canCancel = (plan === "premium" || plan === "pro") && !isCancelling;
+
+    return (
+      <div style={S.root}>
+        <StarField />
+        <div style={S.wrap}>
+          <Logo />
+          <div style={S.card}>
+            <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "1.5rem" }}>Account</div>
+
+            {/* Email */}
+            <div style={{ fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#8a879e", marginBottom: "0.3rem" }}>Email</div>
+            <div style={{ fontSize: "0.92rem", color: "#e8e6f0", marginBottom: "1.5rem" }}>{user?.email}</div>
+
+            {/* Plan */}
+            <div style={{ fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#8a879e", marginBottom: "0.3rem" }}>Plan</div>
+            {current ? (
+              <div style={{ display: "flex", alignItems: "baseline", gap: "0.75rem", marginBottom: "0.3rem" }}>
+                <div style={{ fontSize: "1rem", color: current.accent }}>{current.label}</div>
+                <div style={{ fontSize: "0.85rem", color: "#8a879e" }}>{current.price}</div>
+              </div>
+            ) : (
+              <div style={{ fontSize: "0.92rem", color: "#8a879e", marginBottom: "0.3rem" }}>Free</div>
+            )}
+
+            {isCancelling && (
+              <div style={{ fontSize: "0.78rem", color: "#e8a87c", marginBottom: "0.5rem" }}>
+                Cancels at end of billing period{nextDate ? ` — ${nextDate}` : ""}
+              </div>
+            )}
+            {isPastDue && (
+              <div style={{ fontSize: "0.78rem", color: "#e87c7c", marginBottom: "0.5rem" }}>
+                Payment failed — please update your payment method
+              </div>
+            )}
+
+            {/* Next billing */}
+            {nextDate && !isCancelling && (
+              <>
+                <div style={{ fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#8a879e", marginTop: "1.25rem", marginBottom: "0.3rem" }}>Next billing date</div>
+                <div style={{ fontSize: "0.92rem", color: "#e8e6f0", marginBottom: "1.25rem" }}>{nextDate}</div>
+              </>
+            )}
+
+            <div style={{ height: "0.5px", background: "rgba(255,255,255,0.08)", margin: "1.25rem 0" }} />
+
+            {/* Upgrade button */}
+            {(!plan || plan === "single") && (
+              <button
+                style={{ ...S.btnPrimary, width: "100%", marginBottom: "0.75rem" }}
+                onClick={() => setView("payment")}
+              >
+                Upgrade Plan →
+              </button>
+            )}
+
+            {/* Cancel */}
+            {canCancel && !cancelConfirm && (
+              <button
+                style={{ ...S.btn, width: "100%", color: "#8a879e", borderColor: "rgba(255,255,255,0.08)" }}
+                onClick={() => setCancelConfirm(true)}
+              >
+                Cancel Subscription
+              </button>
+            )}
+
+            {/* Cancel confirmation */}
+            {cancelConfirm && (
+              <div style={{ ...S.infoBox, borderColor: "rgba(232,135,100,0.3)", marginTop: "0.5rem" }}>
+                <div style={{ fontSize: "0.88rem", color: "#e8e6f0", marginBottom: "1rem", lineHeight: 1.6 }}>
+                  Are you sure? You will lose access to premium sessions at the end of your billing period.
+                </div>
+                <div style={S.row}>
+                  <button style={S.btn} onClick={() => setCancelConfirm(false)}>Keep Plan</button>
+                  <button
+                    style={{ ...S.btn, color: "#e87c7c", borderColor: "rgba(232,124,124,0.35)" }}
+                    onClick={cancelSubscription}
+                    disabled={cancelling}
+                  >
+                    {cancelling ? "Cancelling..." : "Yes, Cancel"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          <button style={S.resetBtn} onClick={() => setView("home")}>← Back to home</button>
+        </div>
+      </div>
+    );
+  }
+
   // ── HOME ──
   if (view === "home") return (
     <div style={S.root}>
@@ -995,18 +1135,26 @@ export default function MindTranceformApp() {
       <div style={S.wrap}>
         <Logo sub />
         <div style={S.card}>
+          {welcomeMsg && (
+            <div style={{ ...S.infoBox, marginBottom: "1.25rem", textAlign: "center", color: "#a8d8c8" }}>
+              ✦ {welcomeMsg}
+            </div>
+          )}
           <div style={{ fontSize: "1.2rem", fontWeight: 300, marginBottom: "0.3rem" }}>
             Welcome back{user?.email ? `, ${user.email.split("@")[0]}` : ""}
           </div>
           <div style={{ fontSize: "0.78rem", color: "#8a879e", marginBottom: "2rem" }}>{user?.email}</div>
           <button
             style={{ ...S.btnPrimary, width: "100%", padding: "1rem", marginBottom: "0.75rem", fontSize: "1rem" }}
-            onClick={() => { setStep(0); setForm(EMPTY_FORM); setError(""); setResult(null); setView("quiz"); }}
+            onClick={() => { setStep(0); setForm(EMPTY_FORM); setError(""); setResult(null); setView("quiz"); setWelcomeMsg(""); }}
           >
             ✦ New Session
           </button>
-          <button style={{ ...S.btn, width: "100%", padding: "1rem" }} onClick={() => { setView("sessions"); fetchSessions(); }}>
+          <button style={{ ...S.btn, width: "100%", padding: "1rem", marginBottom: "0.75rem" }} onClick={() => { setView("sessions"); fetchSessions(); }}>
             My Sessions
+          </button>
+          <button style={{ ...S.btn, width: "100%", padding: "1rem" }} onClick={() => { setView("account"); fetchSubStatus(); }}>
+            Account
           </button>
           {!plan && sessionsUsed === 0 && (
             <div style={S.freeTag}>✦ Your first session is free. No card needed.</div>
@@ -1021,7 +1169,10 @@ export default function MindTranceformApp() {
           )}
           {plan && (
             <div style={{ ...S.freeTag, color: "#8a879e", marginTop: "1rem", textTransform: "capitalize" }}>
-              Plan: <span style={{ color: "#a8d8c8" }}>{plan}</span>
+              Plan: <span
+                style={{ color: "#a8d8c8", cursor: "pointer", textDecoration: "underline" }}
+                onClick={() => { setView("account"); fetchSubStatus(); }}
+              >{plan}</span>
             </div>
           )}
         </div>
