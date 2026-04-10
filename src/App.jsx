@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const BACKEND_URL = "https://mindtranceform-backend.onrender.com";
@@ -24,9 +24,12 @@ function getProgramOptions(plan) {
 }
 
 const VOICES = [
-  { value: "Female Calm", icon: "◌", label: "Female Calm",        sub: "Warm, nurturing, soft" },
-  { value: "Male Calm",   icon: "◎", label: "Male Calm",          sub: "Grounded, steady, assured" },
-  { value: "Male Deep",   icon: "●", label: "Male Deep Hypnosis", sub: "Rich, resonant, deeply immersive" },
+  { value: "Female Calm",   icon: "◌", label: "Female Calm",        sub: "Warm, nurturing, soft" },
+  { value: "Female Warm",   icon: "◍", label: "Female Warm",        sub: "Bright, soothing, uplifting" },
+  { value: "Male Calm",     icon: "◎", label: "Male Calm",          sub: "Grounded, steady, assured" },
+  { value: "Male Smooth",   icon: "◉", label: "Male Smooth",        sub: "Gentle, clear, approachable" },
+  { value: "Male Deep",     icon: "●", label: "Male Deep Hypnosis", sub: "Rich, resonant, deeply immersive" },
+  { value: "Male Resonant", icon: "◈", label: "Male Resonant",      sub: "Bold, commanding, hypnotic" },
 ];
 
 const BACKGROUNDS = [
@@ -264,13 +267,15 @@ function Dots() {
   );
 }
 
-function OptionList({ options, selected, onSelect, onLockedSelect }) {
+function OptionList({ options, selected, onSelect, onLockedSelect, onPreview, previewLoading, previewPlaying }) {
   return (
     <div style={S.optionsList}>
       {options.map((o) => {
         const sel = selected === o.value;
         const locked = !!o.locked;
         const hasLockedAction = locked && !!onLockedSelect;
+        const isLoadingPreview = previewLoading === o.value;
+        const isPlayingPreview = previewPlaying === o.value;
         return (
           <div
             key={o.value}
@@ -289,6 +294,21 @@ function OptionList({ options, selected, onSelect, onLockedSelect }) {
               <div style={S.optionLabel}>{o.label}</div>
               <div style={S.optionSub}>{o.sub}</div>
             </div>
+            {onPreview && !locked && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onPreview(o.value); }}
+                style={{
+                  background: isPlayingPreview ? "rgba(168,216,200,0.15)" : "none",
+                  border: "0.5px solid rgba(168,216,200,0.35)",
+                  borderRadius: 6, color: "#a8d8c8", fontSize: "0.78rem",
+                  padding: "0.2rem 0.55rem", cursor: "pointer", flexShrink: 0,
+                  marginRight: "0.5rem", fontFamily: "inherit",
+                  transition: "background 0.18s",
+                }}
+              >
+                {isLoadingPreview ? "···" : isPlayingPreview ? "■" : "▷"}
+              </button>
+            )}
             {locked
               ? <div style={{ fontSize: "0.68rem", color: "#c9a8d8", border: "0.5px solid #c9a8d8", borderRadius: 6, padding: "0.15rem 0.45rem", flexShrink: 0, letterSpacing: "0.04em" }}>{o.badge || "🔒 Upgrade"}</div>
               : <div style={S.check(sel)}>{sel ? "✓" : ""}</div>
@@ -338,6 +358,11 @@ export default function MindTranceformApp() {
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState(null);
   const [genStep, setGenStep] = useState(0);
+
+  // Voice preview
+  const previewAudioRef                         = useRef(null);
+  const [previewLoading, setPreviewLoading]     = useState(null);
+  const [previewPlaying, setPreviewPlaying]     = useState(null);
 
   // Sessions
   const [sessions, setSessions]               = useState([]);
@@ -491,6 +516,31 @@ export default function MindTranceformApp() {
   }
 
   function updateForm(key, val) { setForm((f) => ({ ...f, [key]: val })); }
+
+  async function previewVoice(voiceName) {
+    // Stop and clean up any current preview
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current = null;
+      if (previewPlaying === voiceName) { setPreviewPlaying(null); return; } // toggle off
+      setPreviewPlaying(null);
+    }
+    setPreviewLoading(voiceName);
+    try {
+      const res = await fetch(`${BACKEND_URL}/preview-voice/${encodeURIComponent(voiceName)}`);
+      if (!res.ok) throw new Error("Preview failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => { setPreviewPlaying(null); URL.revokeObjectURL(url); previewAudioRef.current = null; };
+      previewAudioRef.current = audio;
+      audio.play();
+      setPreviewPlaying(voiceName);
+    } catch (err) {
+      console.error("Voice preview failed:", err);
+    }
+    setPreviewLoading(null);
+  }
 
   async function generate() {
     // Free session limit: null plan = free tier, 1 session lifetime
@@ -679,15 +729,28 @@ export default function MindTranceformApp() {
               <button style={S.btn} onClick={() => setView("home")}>Home</button>
               <button style={S.btnPrimary} onClick={generate}>✦ Regenerate</button>
             </div>
+            {result.audioUrl && (
+              !plan ? (
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", marginTop: "0.75rem", fontSize: "0.82rem", color: "#8a879e" }}>
+                  <span>🔒</span><span>Upgrade to Premium to download your sessions</span>
+                </div>
+              ) : (
+                <div style={{ ...S.row, marginTop: "0.5rem" }}>
+                  <button style={S.btn} onClick={() => {
+                    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+                    const d = new Date();
+                    const a = document.createElement("a");
+                    a.href = result.audioUrl;
+                    a.download = `MindTranceform-${form.program || "Session"}-${months[d.getMonth()]}-${d.getDate()}-${d.getFullYear()}.mp3`;
+                    a.click();
+                  }}>↓ Download MP3</button>
+                  {plan === "pro" && (
+                    <button style={S.btn} onClick={() => navigator.clipboard.writeText("I just created a personalized meditation with Mind Tranceform — try it free at mindtranceform.com")}>Share</button>
+                  )}
+                </div>
+              )
+            )}
             <div style={{ ...S.row, marginTop: "0.5rem" }}>
-              {result.audioUrl && (
-                <button style={S.btn} onClick={() => {
-                  const a = document.createElement("a");
-                  a.href = result.audioUrl;
-                  a.download = `${form.program || "session"}.mp3`;
-                  a.click();
-                }}>↓ Download Audio</button>
-              )}
               <button style={S.btn} onClick={() => {
                 const blob = new Blob([result.script], { type: "text/plain" });
                 const url = URL.createObjectURL(blob);
@@ -867,15 +930,28 @@ export default function MindTranceformApp() {
             <><audio controls style={S.audio} src={selectedSession.audioUrl} /><div style={S.audioNote}>Your personalized audio session</div></>
           }
           <div style={S.scriptBox}>{selectedSession.script}</div>
+          {selectedSession.audioUrl && (
+            !plan ? (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", marginBottom: "0.5rem", fontSize: "0.82rem", color: "#8a879e" }}>
+                <span>🔒</span><span>Upgrade to Premium to download your sessions</span>
+              </div>
+            ) : (
+              <div style={{ ...S.row, marginBottom: "0.5rem" }}>
+                <button style={S.btn} onClick={() => {
+                  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+                  const d = new Date();
+                  const a = document.createElement("a");
+                  a.href = selectedSession.audioUrl;
+                  a.download = `MindTranceform-${selectedSession.program || "Session"}-${months[d.getMonth()]}-${d.getDate()}-${d.getFullYear()}.mp3`;
+                  a.click();
+                }}>↓ Download MP3</button>
+                {plan === "pro" && (
+                  <button style={S.btn} onClick={() => navigator.clipboard.writeText("I just created a personalized meditation with Mind Tranceform — try it free at mindtranceform.com")}>Share</button>
+                )}
+              </div>
+            )
+          )}
           <div style={S.row}>
-            {selectedSession.audioUrl && (
-              <button style={S.btn} onClick={() => {
-                const a = document.createElement("a");
-                a.href = selectedSession.audioUrl;
-                a.download = `${selectedSession.title || "session"}.mp3`;
-                a.click();
-              }}>↓ Download Audio</button>
-            )}
             <button style={S.btn} onClick={() => {
               const blob = new Blob([selectedSession.script], { type: "text/plain" });
               const url = URL.createObjectURL(blob);
@@ -997,6 +1073,9 @@ export default function MindTranceformApp() {
               selected={form[current.id]}
               onSelect={(val) => { updateForm(current.id, val); setError(""); }}
               onLockedSelect={current.lockedAction === "payment" ? () => setView("payment") : undefined}
+              onPreview={current.id === "voice" ? previewVoice : undefined}
+              previewLoading={previewLoading}
+              previewPlaying={previewPlaying}
             />
           )}
           <div style={S.row}>
