@@ -376,8 +376,19 @@ export default function MindTranceformApp() {
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [cancelling, setCancelling]       = useState(false);
 
+  // PWA install prompt
+  const [deferredInstall, setDeferredInstall] = useState(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+
   // Dynamic steps based on plan
   const steps = buildSteps(plan);
+
+  // Capture PWA install prompt
+  useEffect(() => {
+    const handler = e => { e.preventDefault(); setDeferredInstall(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
 
   // Inject keyframe animations
   useEffect(() => {
@@ -655,6 +666,8 @@ export default function MindTranceformApp() {
         const audioUrl = data.audioBase64 ? `data:audio/mpeg;base64,${data.audioBase64}` : null;
         setResult({ script: data.script, audioUrl, audioUnavailable: data.audioUnavailable || !data.audioBase64 });
         setView("result");
+        // Show install prompt after first session
+        if (newUsed === 1) setShowInstallBanner(true);
         return;
       }
       throw new Error(typeof data.error === "string" ? data.error : "Generation failed. Please try again.");
@@ -870,6 +883,30 @@ export default function MindTranceformApp() {
                 URL.revokeObjectURL(url);
               }}>↓ Download Script</button>
             </div>
+            {showInstallBanner && (
+              <div style={{ ...S.infoBox, marginTop: "1.25rem", borderColor: "rgba(168,216,200,0.25)" }}>
+                <div style={{ fontSize: "0.88rem", color: "#e8e6f0", marginBottom: "0.25rem" }}>
+                  Add Mind Tranceform to your home screen
+                </div>
+                <div style={{ fontSize: "0.75rem", color: "#8a879e", marginBottom: "0.85rem" }}>
+                  {deferredInstall
+                    ? "Install for easy access — opens instantly, no browser needed."
+                    : "Tap your browser menu and select \"Add to Home Screen\" for instant access."}
+                </div>
+                <div style={S.row}>
+                  <button style={S.btn} onClick={() => setShowInstallBanner(false)}>Dismiss</button>
+                  {deferredInstall && (
+                    <button style={S.btnPrimary} onClick={() => {
+                      deferredInstall.prompt();
+                      deferredInstall.userChoice.then(() => {
+                        setDeferredInstall(null);
+                        setShowInstallBanner(false);
+                      });
+                    }}>Install App ✦</button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
