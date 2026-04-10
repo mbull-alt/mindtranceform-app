@@ -345,6 +345,7 @@ export default function MindTranceformApp() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError]       = useState("");
   const [authBusy, setAuthBusy]         = useState(false);
+  const [authForgot, setAuthForgot]     = useState(false);
 
   // Safety
   const [safetyAccepted, setSafetyAccepted] = useState(() => !!localStorage.getItem("mt_safety_accepted"));
@@ -433,13 +434,22 @@ export default function MindTranceformApp() {
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user ?? null);
-      setView(session?.user ? "home" : "auth");
-      if (session?.user) {
-        fetch(`${BACKEND_URL}/user/register`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        }).catch(() => {});
+      const u = session?.user ?? null;
+      setUser(u);
+      setView(u ? "home" : "auth");
+      if (u) {
+        localStorage.setItem("mt_user_id", u.id);
+        if (u.email) localStorage.setItem("mt_user_email", u.email);
+        // Only register named accounts — skip anonymous guests
+        if (u.email) {
+          fetch(`${BACKEND_URL}/user/register`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          }).catch(() => {});
+        }
+      } else {
+        localStorage.removeItem("mt_user_id");
+        localStorage.removeItem("mt_user_email");
       }
     });
     return () => subscription.unsubscribe();
@@ -465,8 +475,30 @@ export default function MindTranceformApp() {
     setAuthBusy(false);
   }
 
+  async function handleForgotPassword() {
+    if (!authEmail.trim()) { setAuthError("Enter your email above first."); return; }
+    setAuthBusy(true);
+    setAuthError("");
+    const { error } = await supabase.auth.resetPasswordForEmail(authEmail, {
+      redirectTo: window.location.origin,
+    });
+    if (error) setAuthError(error.message);
+    else setAuthError("Check your email for a password reset link.");
+    setAuthBusy(false);
+  }
+
+  async function handleGuestLogin() {
+    setAuthBusy(true);
+    setAuthError("");
+    const { error } = await supabase.auth.signInAnonymously();
+    if (error) setAuthError("Guest access unavailable — please create a free account.");
+    setAuthBusy(false);
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut();
+    localStorage.removeItem("mt_user_id");
+    localStorage.removeItem("mt_user_email");
     setStep(0);
     setForm(EMPTY_FORM);
     setResult(null);
@@ -668,27 +700,68 @@ export default function MindTranceformApp() {
       <div style={S.wrap}>
         <Logo sub />
         <div style={S.card}>
-          <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "1.5rem", textAlign: "center" }}>
-            {authMode === "login" ? "Welcome back" : "Create your account"}
-          </div>
-          {authError && (
-            <div style={authError.includes("Check your email") ? S.infoBox : S.errorBox}>{authError}</div>
+          {authForgot ? (
+            <>
+              <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "0.4rem", textAlign: "center" }}>Reset password</div>
+              <div style={{ fontSize: "0.8rem", color: "#8a879e", textAlign: "center", marginBottom: "1.5rem" }}>
+                Enter your email and we'll send a reset link
+              </div>
+              {authError && (
+                <div style={authError.includes("Check your email") || authError.includes("reset link") ? S.infoBox : S.errorBox}>{authError}</div>
+              )}
+              <input style={{ ...S.input, marginBottom: "1rem" }} type="email" placeholder="Email"
+                value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} autoFocus />
+              <button style={{ ...S.btnPrimary, width: "100%", marginBottom: "0.75rem" }}
+                onClick={handleForgotPassword} disabled={authBusy}>
+                {authBusy ? "..." : "Send Reset Email"}
+              </button>
+              <div style={{ textAlign: "center" }}>
+                <button style={S.resetBtn} onClick={() => { setAuthForgot(false); setAuthError(""); }}>← Back to sign in</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "1.5rem", textAlign: "center" }}>
+                {authMode === "login" ? "Welcome back" : "Create your account"}
+              </div>
+              {authError && (
+                <div style={authError.includes("Check your email") ? S.infoBox : S.errorBox}>{authError}</div>
+              )}
+              <form onSubmit={handleAuth}>
+                <input style={{ ...S.input, marginBottom: "0.75rem" }} type="email" placeholder="Email"
+                  value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required autoFocus />
+                <input style={{ ...S.input, marginBottom: authMode === "login" ? "0.4rem" : "1.25rem" }}
+                  type="password" placeholder="Password (min 6 characters)"
+                  value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required />
+                {authMode === "login" && (
+                  <div style={{ textAlign: "right", marginBottom: "1.25rem" }}>
+                    <button type="button" style={{ ...S.resetBtn, fontSize: "0.78rem" }}
+                      onClick={() => { setAuthForgot(true); setAuthError(""); }}>
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+                <button style={{ ...S.btnPrimary, width: "100%" }} type="submit" disabled={authBusy}>
+                  {authBusy ? "..." : authMode === "login" ? "Sign In" : "Create Account"}
+                </button>
+              </form>
+              <div style={S.freeTag}>✦ Your first session is free. No card needed.</div>
+              <div style={{ textAlign: "center", marginTop: "0.75rem" }}>
+                <button style={S.resetBtn} onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthError(""); }}>
+                  {authMode === "login" ? "No account? Sign up free" : "Already have an account? Sign in"}
+                </button>
+              </div>
+              <div style={{ height: "0.5px", background: "rgba(255,255,255,0.07)", margin: "1.25rem 0" }} />
+              <div style={{ textAlign: "center" }}>
+                <button style={{ ...S.resetBtn, color: "#8a879e" }} onClick={handleGuestLogin} disabled={authBusy}>
+                  Continue as guest
+                </button>
+                <div style={{ fontSize: "0.7rem", color: "#8a879e", marginTop: "0.35rem", opacity: 0.7 }}>
+                  1 free session · no account needed
+                </div>
+              </div>
+            </>
           )}
-          <form onSubmit={handleAuth}>
-            <input style={{ ...S.input, marginBottom: "0.75rem" }} type="email" placeholder="Email"
-              value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required autoFocus />
-            <input style={{ ...S.input, marginBottom: "1.25rem" }} type="password" placeholder="Password (min 6 characters)"
-              value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required />
-            <button style={{ ...S.btnPrimary, width: "100%" }} type="submit" disabled={authBusy}>
-              {authBusy ? "..." : authMode === "login" ? "Log In" : "Create Account"}
-            </button>
-          </form>
-          <div style={S.freeTag}>✦ Your first session is free. No card needed.</div>
-          <div style={{ textAlign: "center", marginTop: "1rem" }}>
-            <button style={S.resetBtn} onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthError(""); }}>
-              {authMode === "login" ? "No account? Sign up" : "Already have an account? Log in"}
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -1135,15 +1208,25 @@ export default function MindTranceformApp() {
       <div style={S.wrap}>
         <Logo sub />
         <div style={S.card}>
+          {user?.is_anonymous && (
+            <div style={{ ...S.infoBox, marginBottom: "1.25rem", textAlign: "center", borderColor: "rgba(201,168,216,0.3)" }}>
+              <div style={{ fontSize: "0.82rem", color: "#c9a8d8", marginBottom: "0.5rem" }}>You're in guest mode</div>
+              <div style={{ fontSize: "0.75rem", color: "#8a879e", marginBottom: "0.75rem" }}>Create a free account to save sessions and access your library</div>
+              <button style={{ ...S.btnPrimary, padding: "0.4rem 1.25rem", fontSize: "0.82rem", borderColor: "#c9a8d8", color: "#c9a8d8" }}
+                onClick={() => { supabase.auth.signOut(); }}>
+                Create Account →
+              </button>
+            </div>
+          )}
           {welcomeMsg && (
             <div style={{ ...S.infoBox, marginBottom: "1.25rem", textAlign: "center", color: "#a8d8c8" }}>
               ✦ {welcomeMsg}
             </div>
           )}
           <div style={{ fontSize: "1.2rem", fontWeight: 300, marginBottom: "0.3rem" }}>
-            Welcome back{user?.email ? `, ${user.email.split("@")[0]}` : ""}
+            {user?.is_anonymous ? "Guest Session" : `Welcome back${user?.email ? `, ${user.email.split("@")[0]}` : ""}`}
           </div>
-          <div style={{ fontSize: "0.78rem", color: "#8a879e", marginBottom: "2rem" }}>{user?.email}</div>
+          <div style={{ fontSize: "0.78rem", color: "#8a879e", marginBottom: "2rem" }}>{user?.email || ""}</div>
           <button
             style={{ ...S.btnPrimary, width: "100%", padding: "1rem", marginBottom: "0.75rem", fontSize: "1rem" }}
             onClick={() => { setStep(0); setForm(EMPTY_FORM); setError(""); setResult(null); setView("quiz"); setWelcomeMsg(""); }}
