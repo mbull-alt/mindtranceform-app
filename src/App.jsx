@@ -357,17 +357,13 @@ function LegalModal({ type, onClose }) {
   );
 }
 
-function Footer({ onOpenModal }) {
+function Footer({ onOpenModal, onHowToUse }) {
+  const linkStyle = { background: "none", border: "none", color: "#8a879e", fontSize: "0.68rem", cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", letterSpacing: "0.05em", opacity: 0.7, margin: "0 0.75rem" };
   return (
     <div style={{ textAlign: "center", padding: "1.75rem 0 0.5rem" }}>
-      <button
-        style={{ background: "none", border: "none", color: "#8a879e", fontSize: "0.68rem", cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", marginRight: "1.5rem", letterSpacing: "0.05em", opacity: 0.7 }}
-        onClick={() => onOpenModal("privacy")}
-      >Privacy Policy</button>
-      <button
-        style={{ background: "none", border: "none", color: "#8a879e", fontSize: "0.68rem", cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", letterSpacing: "0.05em", opacity: 0.7 }}
-        onClick={() => onOpenModal("terms")}
-      >Terms of Service</button>
+      <button style={linkStyle} onClick={() => onOpenModal("privacy")}>Privacy Policy</button>
+      <button style={linkStyle} onClick={() => onOpenModal("terms")}>Terms of Service</button>
+      {onHowToUse && <button style={linkStyle} onClick={onHowToUse}>How to use</button>}
     </div>
   );
 }
@@ -1031,7 +1027,7 @@ export default function MindTranceformApp() {
   if (!authReady) return null;
 
   const modal = legalModal ? <LegalModal type={legalModal} onClose={() => setLegalModal(null)} /> : null;
-  const footer = <Footer onOpenModal={setLegalModal} />;
+  const footer = <Footer onOpenModal={setLegalModal} onHowToUse={() => { setSafetyReturn("home"); setView("safety"); }} />;
 
   // ── AUTH ──
   if (view === "auth") return (
