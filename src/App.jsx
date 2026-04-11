@@ -368,6 +368,178 @@ function Footer({ onOpenModal, onHowToUse }) {
   );
 }
 
+// ─── BACKGROUND AUDIO ────────────────────────────────────────────────────────
+function buildBackgroundNodes(ctx, type, dest) {
+  const nodes = [];
+  try {
+    if (type === "432 Hz" || type === "528 Hz") {
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.value = type === "432 Hz" ? 432 : 528;
+      osc.connect(dest);
+      osc.start();
+      nodes.push(osc);
+
+    } else if (type === "Theta Waves" || type === "Delta Sleep") {
+      // Binaural beat: left/right ear receive slightly different carrier frequencies.
+      // The difference equals the desired brainwave frequency (6 Hz theta, 2 Hz delta).
+      const base = type === "Theta Waves" ? 200 : 100;
+      const beat = type === "Theta Waves" ? 6 : 2;
+      const merger = ctx.createChannelMerger(2);
+      merger.connect(dest);
+      [base, base + beat].forEach((freq, ch) => {
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        osc.connect(merger, 0, ch);
+        osc.start();
+        nodes.push(osc);
+      });
+
+    } else if (type === "Rain" || type === "Ocean") {
+      const sr = ctx.sampleRate;
+      const seconds = 8;
+      const buf = ctx.createBuffer(2, sr * seconds, sr);
+
+      for (let ch = 0; ch < 2; ch++) {
+        const d = buf.getChannelData(ch);
+        // Paul Kellet pink noise — natural spectral balance for both rain and ocean
+        let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+        for (let i = 0; i < d.length; i++) {
+          const w = Math.random() * 2 - 1;
+          b0 = 0.99886*b0 + w*0.0555179; b1 = 0.99332*b1 + w*0.0750759;
+          b2 = 0.96900*b2 + w*0.1538520; b3 = 0.86650*b3 + w*0.3104856;
+          b4 = 0.55000*b4 + w*0.5329522; b5 = -0.7616*b5 - w*0.0168980;
+          d[i] = (b0+b1+b2+b3+b4+b5+b6+w*0.5362) * (type === "Rain" ? 0.18 : 0.28);
+          b6 = w * 0.115926;
+        }
+      }
+
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+
+      if (type === "Rain") {
+        // Bandpass: bring out the mid-high sibilance of rainfall
+        const bp = ctx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.value = 4000;
+        bp.Q.value = 0.4;
+        src.connect(bp);
+        bp.connect(dest);
+      } else {
+        // Ocean: heavy low-pass + slow wave-like tremolo via LFO
+        const lp = ctx.createBiquadFilter();
+        lp.type = "lowpass";
+        lp.frequency.value = 600;
+        lp.Q.value = 0.7;
+
+        const waveGain = ctx.createGain();
+        waveGain.gain.value = 0.65;
+
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        lfo.type = "sine";
+        lfo.frequency.value = 0.13; // ~8 s wave period
+        lfoGain.gain.value = 0.35;
+        lfo.connect(lfoGain);
+        lfoGain.connect(waveGain.gain); // modulate gain ±0.35 around 0.65
+
+        src.connect(lp);
+        lp.connect(waveGain);
+        waveGain.connect(dest);
+        lfo.start();
+        src.start();
+        nodes.push(src, lfo);
+        return nodes;
+      }
+
+      src.start();
+      nodes.push(src);
+    }
+  } catch (e) {
+    console.error("Background audio error:", e);
+  }
+  return nodes;
+}
+
+function BackgroundPlayer({ background, intensity }) {
+  const ctxRef   = useRef(null);
+  const nodesRef = useRef([]);
+  const gainRef  = useRef(null);
+
+  const defaultVol = { Subtle: 15, Balanced: 30, Immersive: 50 }[intensity] ?? 25;
+  const [vol, setVol]       = useState(defaultVol);
+  const [playing, setPlaying] = useState(false);
+
+  // Clean up AudioContext when component unmounts or background changes
+  useEffect(() => () => stopBg(), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!background || !window.AudioContext && !window.webkitAudioContext) return null;
+
+  function startBg() {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AudioCtx();
+    ctxRef.current = ctx;
+    const gain = ctx.createGain();
+    gain.gain.value = vol / 100;
+    gain.connect(ctx.destination);
+    gainRef.current = gain;
+    nodesRef.current = buildBackgroundNodes(ctx, background, gain);
+    setPlaying(true);
+  }
+
+  function stopBg() {
+    nodesRef.current.forEach(n => { try { n.stop(); } catch {} });
+    nodesRef.current = [];
+    if (ctxRef.current) { ctxRef.current.close(); ctxRef.current = null; }
+    gainRef.current = null;
+    setPlaying(false);
+  }
+
+  function handleVol(v) {
+    setVol(v);
+    if (gainRef.current) gainRef.current.gain.value = v / 100;
+  }
+
+  const isBinaural = background === "Theta Waves" || background === "Delta Sleep";
+
+  return (
+    <div style={{ marginBottom: "1rem" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", marginBottom: playing ? "0.65rem" : 0 }}>
+        <button
+          style={{
+            flex: 1, padding: "0.55rem 0.75rem", borderRadius: 10, fontFamily: "inherit",
+            border: playing ? "0.5px solid #a8d8c8" : "0.5px solid rgba(255,255,255,0.15)",
+            background: playing ? "rgba(168,216,200,0.08)" : "transparent",
+            color: playing ? "#a8d8c8" : "#8a879e", fontSize: "0.82rem", cursor: "pointer",
+            transition: "all 0.2s",
+          }}
+          onClick={playing ? stopBg : startBg}
+        >
+          {playing ? `■  ${background}` : `▷  ${background}`}
+        </button>
+      </div>
+      {playing && (
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <span style={{ fontSize: "0.68rem", color: "#8a879e", flexShrink: 0 }}>Vol</span>
+          <input
+            type="range" min="0" max="100" value={vol}
+            onChange={e => handleVol(Number(e.target.value))}
+            style={{ flex: 1, accentColor: "#a8d8c8", cursor: "pointer", height: 3 }}
+          />
+          <span style={{ fontSize: "0.68rem", color: "#8a879e", flexShrink: 0, minWidth: 26, textAlign: "right" }}>{vol}%</span>
+        </div>
+      )}
+      {isBinaural && (
+        <div style={{ fontSize: "0.7rem", color: "#8a879e", marginTop: "0.4rem", opacity: 0.7 }}>
+          ◦ Use headphones for binaural effect
+        </div>
+      )}
+    </div>
+  );
+}
+
 function OptionList({ options, selected, onSelect, onLockedSelect, onPreview, previewLoading, previewPlaying }) {
   return (
     <div style={S.optionsList}>
@@ -1250,6 +1422,9 @@ export default function MindTranceformApp() {
                 /><div style={S.audioNote}>Your personalized audio session</div></>
               : <div style={S.infoBox}>{result.audioUnavailable ? "Audio is temporarily unavailable — your personalized script is ready below." : "Your personalized script is ready below."}</div>
             }
+            {form.background && (
+              <BackgroundPlayer background={form.background} intensity={form.backgroundIntensity} />
+            )}
             <div style={S.scriptBox}>{result.script}</div>
             <div style={S.row}>
               <button style={S.btn} onClick={() => setView("home")}>Home</button>
@@ -1542,6 +1717,9 @@ export default function MindTranceformApp() {
           {selectedSession.audioUrl &&
             <><audio controls style={S.audio} src={selectedSession.audioUrl} /><div style={S.audioNote}>Your personalized audio session</div></>
           }
+          {selectedSession.background && (
+            <BackgroundPlayer background={selectedSession.background} intensity={selectedSession.backgroundIntensity} />
+          )}
           <div style={S.scriptBox}>{selectedSession.script}</div>
           {selectedSession.audioUrl && (
             !plan ? (
