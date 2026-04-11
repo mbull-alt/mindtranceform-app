@@ -598,7 +598,7 @@ export default function MindTranceformApp() {
         return;
       }
       const hostname = window.location.hostname;
-      const ownHosts = ["mindtranceform.com", "app.mindtranceform.com", "localhost", "127.0.0.1"];
+      const ownHosts = ["mindtranceform.com", "app.mindtranceform.com", "app.mindtranceformapp.com", "localhost", "127.0.0.1"];
       if (!ownHosts.includes(hostname)) {
         try {
           const res = await fetch(`${BACKEND_URL}/whitelabel/domain/${encodeURIComponent(hostname)}`);
@@ -1909,7 +1909,7 @@ export default function MindTranceformApp() {
                 </button>
               )}
               {referralCode && (() => {
-                const refLink = `https://app.mindtranceform.com?ref=${referralCode}`;
+                const refLink = `https://app.mindtranceformapp.com?ref=${referralCode}`;
                 const refText = `I've been using Mind Tranceform for personalized AI meditations — try it free: ${refLink}`;
                 return (
                   <>
