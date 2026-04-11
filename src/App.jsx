@@ -816,7 +816,8 @@ export default function MindTranceformApp() {
         setSafetyReturn("home");
         setView("safety");
       } else {
-        setView(session?.user ? "home" : "auth");
+        const isRootPath = window.location.pathname === "/" || window.location.pathname === "";
+        setView(session?.user ? "home" : (isRootPath ? "landing" : "auth"));
       }
       setAuthReady(true);
       if (isPaymentSuccess && session?.user) {
@@ -835,7 +836,7 @@ export default function MindTranceformApp() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      setView(u ? "home" : "auth");
+      setView(u ? "home" : "landing");
       if (u) {
         localStorage.setItem("mt_user_id", u.id);
         if (u.email) localStorage.setItem("mt_user_email", u.email);
@@ -1200,6 +1201,136 @@ export default function MindTranceformApp() {
 
   const modal = legalModal ? <LegalModal type={legalModal} onClose={() => setLegalModal(null)} /> : null;
   const footer = <Footer onOpenModal={setLegalModal} onHowToUse={() => { setSafetyReturn("home"); setView("safety"); }} />;
+
+  // ── LANDING ──
+  if (view === "landing") {
+    const PROGRAMS = [
+      { icon: "🌙", label: "Sleep",               sub: "Deep rest & nighttime calm" },
+      { icon: "🌊", label: "Stress & Anxiety",    sub: "Quiet the mind, steady the body" },
+      { icon: "✨", label: "Abundance",            sub: "Expand into success & possibility" },
+      { icon: "⚡", label: "Confidence",           sub: "Step into your power" },
+      { icon: "🎯", label: "Focus",                sub: "Clear mind, sharp execution" },
+      { icon: "🦋", label: "Weight Loss Mindset",  sub: "Reshape how you see yourself" },
+    ];
+    const STEPS = [
+      { n: "1", title: "Tell us your goal",      body: "Answer a few quick questions — your name, what you want to release or achieve, your preferred voice and background sound." },
+      { n: "2", title: "AI creates your session", body: "We write a personalized script using your name and goal, voice it with AI, and layer in your chosen healing frequency or nature sound." },
+      { n: "3", title: "Listen and transform",   body: "Your session is ready in under 60 seconds. Listen in the app, download the MP3, and replay anytime." },
+    ];
+    const PLANS = [
+      { label: "Free",    price: "$0",      period: "",    sub: "1 personalized session · 5 min",        accent: "#8a879e" },
+      { label: "Single",  price: "$14.99",  period: "",    sub: "1 premium session · 5 min",             accent: "#8a879e" },
+      { label: "Premium", price: "$19.99",  period: "/mo", sub: "Unlimited sessions · up to 15 min",     accent: "#a8d8c8" },
+      { label: "Pro",     price: "$29.99",  period: "/mo", sub: "Unlimited sessions · up to 30 min",     accent: "#c9a8d8" },
+    ];
+    const PLACEHOLDERS = [
+      { user_name: "Sarah",   program: "Sleep",            rating: 5, message: "Hearing my name in the meditation changed everything. It felt like it was made just for me." },
+      { user_name: "James",   program: "Stress & Anxiety", rating: 5, message: "I've tried every meditation app. This is the first one that actually feels personal." },
+      { user_name: "Maria",   program: "Sleep",            rating: 5, message: "I listen every night before bed. My sleep has completely changed in 3 weeks." },
+    ];
+    const reviews = testimonials.length > 0 ? testimonials.slice(0, 3) : PLACEHOLDERS;
+    const lbl = (text) => (
+      <div style={{ fontSize: "0.65rem", letterSpacing: "0.28em", textTransform: "uppercase", color: "#8a879e", marginBottom: "1.25rem", marginTop: "0.25rem" }}>{text}</div>
+    );
+    return (
+      <div style={S.root}>
+        <StarField />
+        <div style={S.wrap}>
+          {/* ── Hero ── */}
+          <Logo sub brand={whiteLabel} />
+          <div style={{ textAlign: "center", padding: "0.5rem 0 2.5rem" }}>
+            <div style={{ fontSize: "clamp(1.5rem, 5vw, 2rem)", fontWeight: 300, lineHeight: 1.35, color: "#e8e6f0", marginBottom: "1rem", letterSpacing: "0.02em" }}>
+              Your name. Your goal.<br />Your session.
+            </div>
+            <div style={{ fontSize: "0.92rem", color: "#8a879e", lineHeight: 1.75, marginBottom: "2rem", maxWidth: 400, margin: "0 auto 2rem" }}>
+              Personalized AI meditation and hypnosis — written for you, voiced by AI, ready in under 60 seconds.
+            </div>
+            <button
+              style={{ ...S.btnPrimary, padding: "0.9rem 2rem", fontSize: "1rem", letterSpacing: "0.06em", display: "inline-block", width: "auto", minWidth: 220 }}
+              onClick={() => { setAuthMode("signup"); setView("auth"); }}
+            >
+              Start Free Session ✦
+            </button>
+            <div style={{ fontSize: "0.7rem", color: "#8a879e", marginTop: "0.7rem", letterSpacing: "0.06em" }}>
+              No credit card needed · First session free
+            </div>
+          </div>
+
+          {/* ── How it works ── */}
+          <div style={S.card}>
+            {lbl("How it works")}
+            {STEPS.map((s) => (
+              <div key={s.n} style={{ display: "flex", gap: "1rem", marginBottom: "1.25rem", alignItems: "flex-start" }}>
+                <div style={{ width: 28, height: 28, borderRadius: "50%", border: "0.5px solid rgba(168,216,200,0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.72rem", color: "#a8d8c8", flexShrink: 0, marginTop: 2 }}>{s.n}</div>
+                <div>
+                  <div style={{ fontSize: "0.92rem", color: "#e8e6f0", marginBottom: "0.25rem" }}>{s.title}</div>
+                  <div style={{ fontSize: "0.82rem", color: "#8a879e", lineHeight: 1.65 }}>{s.body}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── What it helps with ── */}
+          {lbl("What it helps with")}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "2rem" }}>
+            {PROGRAMS.map((p) => (
+              <div key={p.label} style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "0.85rem 1rem", display: "flex", alignItems: "center", gap: "0.65rem" }}>
+                <span style={{ fontSize: 18 }}>{p.icon}</span>
+                <div>
+                  <div style={{ fontSize: "0.85rem", color: "#e8e6f0" }}>{p.label}</div>
+                  <div style={{ fontSize: "0.72rem", color: "#8a879e", marginTop: 1 }}>{p.sub}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Pricing ── */}
+          {lbl("Pricing")}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.6rem", marginBottom: "2rem" }}>
+            {PLANS.map((p) => (
+              <div key={p.label} style={{ background: "rgba(255,255,255,0.04)", border: `0.5px solid ${p.accent === "#8a879e" ? "rgba(255,255,255,0.08)" : p.accent}`, borderRadius: 12, padding: "1rem", textAlign: "center" }}>
+                <div style={{ fontSize: "0.72rem", letterSpacing: "0.12em", textTransform: "uppercase", color: p.accent, marginBottom: "0.4rem" }}>{p.label}</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 300, color: "#e8e6f0" }}>{p.price}<span style={{ fontSize: "0.72rem", color: "#8a879e" }}>{p.period}</span></div>
+                <div style={{ fontSize: "0.72rem", color: "#8a879e", lineHeight: 1.5, marginTop: "0.4rem" }}>{p.sub}</div>
+              </div>
+            ))}
+          </div>
+          <button
+            style={{ ...S.btnPrimary, width: "100%", marginBottom: "2rem" }}
+            onClick={() => { setAuthMode("signup"); setView("auth"); }}
+          >
+            Start Free — No Card Needed ✦
+          </button>
+
+          {/* ── Testimonials ── */}
+          {lbl("What people are saying")}
+          <div style={{ display: "grid", gap: "0.65rem", marginBottom: "2rem" }}>
+            {reviews.map((t, i) => (
+              <div key={i} style={{ ...S.card, padding: "1rem 1.1rem", margin: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
+                  <div style={{ display: "flex", gap: 1 }}>
+                    {[1,2,3,4,5].map((n) => <span key={n} style={{ color: n <= t.rating ? "#d4b896" : "rgba(255,255,255,0.15)", fontSize: "0.7rem" }}>★</span>)}
+                  </div>
+                  <span style={{ fontSize: "0.68rem", color: "#8a879e", letterSpacing: "0.08em" }}>{t.user_name} · {t.program}</span>
+                </div>
+                <div style={{ fontSize: "0.82rem", color: "#c8c5d8", lineHeight: 1.65, fontStyle: "italic" }}>"{t.message}"</div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── Sign in link ── */}
+          <div style={{ textAlign: "center", marginBottom: "1rem" }}>
+            <button style={S.resetBtn} onClick={() => { setAuthMode("login"); setView("auth"); }}>
+              Already have an account? Sign in
+            </button>
+          </div>
+
+          {footer}
+        </div>
+        {modal}
+      </div>
+    );
+  }
 
   // ── AUTH ──
   if (view === "auth") return (
