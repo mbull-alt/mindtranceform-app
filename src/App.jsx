@@ -267,6 +267,111 @@ function Dots() {
   );
 }
 
+const PRIVACY_TEXT = [
+  { h: "PRIVACY POLICY" },
+  { sub: "Effective Date: April 2026" },
+  { p: "Mind Tranceform is operated by Mind Tranceform LLC." },
+  { h2: "Information We Collect" },
+  { p: "We collect your name, email address, and responses to personalization questions solely to generate your custom audio sessions. We also collect payment information processed securely through Stripe. We do not sell your personal data." },
+  { h2: "How We Use Your Information" },
+  { p: "We use your information to generate personalized audio sessions, process payments, send session-related emails, and improve the app experience." },
+  { h2: "Data Storage" },
+  { p: "Your sessions and account information are stored securely using Supabase encrypted cloud storage. Audio files are generated on demand and stored temporarily." },
+  { h2: "Your Rights" },
+  { p: "You may request deletion of your account and all associated data at any time by emailing support@mindtranceform.com. You may cancel your subscription at any time." },
+  { h2: "Children" },
+  { p: "Mind Tranceform is not intended for users under 18 years of age." },
+  { h2: "Cookies" },
+  { p: "We use essential cookies only for authentication and session management." },
+  { h2: "Changes" },
+  { p: "We may update this policy. Updates will be posted in the app and on our website." },
+  { h2: "Contact" },
+  { p: "support@mindtranceform.com" },
+];
+
+const TERMS_TEXT = [
+  { h: "TERMS OF SERVICE" },
+  { sub: "Effective Date: April 2026" },
+  { p: "By using Mind Tranceform you agree to these terms." },
+  { h2: "Service Description" },
+  { p: "Mind Tranceform provides personalized AI-generated meditation and hypnosis-style audio sessions for relaxation and personal development purposes only." },
+  { h2: "Not Medical Advice" },
+  { p: "Mind Tranceform is not medical, psychological, or therapeutic treatment and is not a substitute for professional care. Do not use as a replacement for prescribed treatment or medication. If you have a medical or mental health condition consult your doctor before use." },
+  { h2: "Safety" },
+  { p: "Do not listen while driving, operating machinery, caring for dependents, or in any situation requiring full alertness." },
+  { h2: "User Responsibilities" },
+  { p: "You agree to provide accurate information, not to misuse the service, not to resell or commercially distribute generated audio, and not to share account access." },
+  { h2: "Payments and Subscriptions" },
+  { p: "Subscriptions renew automatically unless cancelled. You may cancel at any time through the app. Payments are processed by Stripe. No refunds for partially used billing periods unless required by law. Single session purchases are non-refundable once the session has been generated." },
+  { h2: "Intellectual Property" },
+  { p: "Generated audio sessions are licensed to you for personal use only. You may not distribute, sell, or commercially exploit session content." },
+  { h2: "Account Termination" },
+  { p: "We may suspend accounts that abuse the platform, attempt to reverse engineer the service, or violate these terms." },
+  { h2: "Limitation of Liability" },
+  { p: "Mind Tranceform is not liable for decisions made based on session content, misuse of the app, or temporary service interruptions." },
+  { h2: "Governing Law" },
+  { p: "These terms are governed by the laws of the state of Georgia, United States." },
+  { h2: "Contact" },
+  { p: "support@mindtranceform.com" },
+];
+
+function LegalModal({ type, onClose }) {
+  const blocks = type === "privacy" ? PRIVACY_TEXT : TERMS_TEXT;
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1000,
+        display: "flex", alignItems: "flex-start", justifyContent: "center",
+        padding: "1.5rem 1rem", overflowY: "auto",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "#0d1030", border: "0.5px solid rgba(255,255,255,0.12)",
+          borderRadius: 20, padding: "2rem 1.75rem", maxWidth: 540, width: "100%",
+          position: "relative", margin: "auto",
+        }}
+      >
+        <button
+          onClick={onClose}
+          style={{
+            position: "absolute", top: "1rem", right: "1rem",
+            background: "none", border: "none", color: "#8a879e",
+            cursor: "pointer", fontSize: "1.1rem", fontFamily: "inherit",
+            lineHeight: 1, padding: "0.25rem 0.5rem",
+          }}
+        >✕</button>
+        <div style={{ maxHeight: "75vh", overflowY: "auto", paddingRight: "0.5rem" }}>
+          {blocks.map((b, i) => {
+            if (b.h)   return <div key={i} style={{ fontSize: "1.1rem", fontWeight: 400, color: "#e8e6f0", letterSpacing: "0.08em", marginBottom: "0.5rem", marginTop: i > 0 ? "1rem" : 0 }}>{b.h}</div>;
+            if (b.sub) return <div key={i} style={{ fontSize: "0.72rem", color: "#8a879e", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "1.25rem" }}>{b.sub}</div>;
+            if (b.h2)  return <div key={i} style={{ fontSize: "0.78rem", fontWeight: 500, color: "#a8d8c8", letterSpacing: "0.08em", textTransform: "uppercase", marginTop: "1.25rem", marginBottom: "0.4rem" }}>{b.h2}</div>;
+            if (b.p)   return <div key={i} style={{ fontSize: "0.85rem", color: "#c8c5d8", lineHeight: 1.75, marginBottom: "0.5rem" }}>{b.p}</div>;
+            return null;
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Footer({ onOpenModal }) {
+  return (
+    <div style={{ textAlign: "center", padding: "1.75rem 0 0.5rem" }}>
+      <button
+        style={{ background: "none", border: "none", color: "#8a879e", fontSize: "0.68rem", cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", marginRight: "1.5rem", letterSpacing: "0.05em", opacity: 0.7 }}
+        onClick={() => onOpenModal("privacy")}
+      >Privacy Policy</button>
+      <button
+        style={{ background: "none", border: "none", color: "#8a879e", fontSize: "0.68rem", cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", letterSpacing: "0.05em", opacity: 0.7 }}
+        onClick={() => onOpenModal("terms")}
+      >Terms of Service</button>
+    </div>
+  );
+}
+
 function OptionList({ options, selected, onSelect, onLockedSelect, onPreview, previewLoading, previewPlaying }) {
   return (
     <div style={S.optionsList}>
@@ -320,7 +425,19 @@ function OptionList({ options, selected, onSelect, onLockedSelect, onPreview, pr
   );
 }
 
-function Logo({ sub = false }) {
+function Logo({ sub = false, brand = null }) {
+  if (brand) {
+    return (
+      <div style={S.logo}>
+        {brand.brand_logo_url
+          ? <img src={brand.brand_logo_url} alt={brand.brand_name}
+              style={{ maxHeight: 56, maxWidth: 220, marginBottom: "0.35rem", display: "block", margin: "0 auto 0.35rem" }} />
+          : <h1 style={{ ...S.h1, color: brand.brand_color || "#a8d8c8" }}>{brand.brand_name}</h1>
+        }
+        {sub && <p style={S.logoSub}>Powered by Mind Tranceform</p>}
+      </div>
+    );
+  }
   return (
     <div style={S.logo}>
       <h1 style={S.h1}>Mind <span style={S.h1span}>Tranceform</span></h1>
@@ -362,6 +479,7 @@ export default function MindTranceformApp() {
 
   // Voice preview
   const previewAudioRef                         = useRef(null);
+  const ratingTimerRef                          = useRef(null);
   const [previewLoading, setPreviewLoading]     = useState(null);
   const [previewPlaying, setPreviewPlaying]     = useState(null);
 
@@ -375,6 +493,46 @@ export default function MindTranceformApp() {
   const [subStatus, setSubStatus]         = useState(null);
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [cancelling, setCancelling]       = useState(false);
+
+  // White label
+  const [whiteLabel, setWhiteLabel]   = useState(null);
+
+  // WL signup form (view="whitelabel")
+  const [wlForm, setWlForm]           = useState({ brand_name: "", email: "", plan: "", brand_color: "#a8d8c8", custom_domain: "", brand_logo_url: "" });
+  const [wlBusy, setWlBusy]           = useState(false);
+  const [wlError, setWlError]         = useState("");
+
+  // WL admin (view="wladmin")
+  const [wlAdmin, setWlAdmin]         = useState(null);
+  const [wlAdminEdit, setWlAdminEdit] = useState({ brand_name: "", brand_color: "", brand_logo_url: "", custom_domain: "" });
+  const [wlAdminBusy, setWlAdminBusy] = useState(false);
+  const [wlAdminMsg, setWlAdminMsg]   = useState("");
+
+  // Corporate inquiry form (view="corporate")
+  const [corpForm, setCorpForm]       = useState({ name: "", email: "", company: "", role: "", teamSize: "", useCase: "", timeline: "", message: "" });
+  const [corpBusy, setCorpBusy]       = useState(false);
+  const [corpDone, setCorpDone]       = useState(false);
+  const [corpError, setCorpError]     = useState("");
+
+  // WL plan selection (must be at top level — used inside view="whitelabel")
+  const [wlSelectedPlan, setWlSelectedPlan] = useState("");
+
+  // Referral system
+  const [referralCode, setReferralCode]   = useState(null);
+  const [referralStats, setReferralStats] = useState({ total: 0, joined: 0, monthsEarned: 0 });
+
+  // Testimonial rating prompt
+  const [ratingState, setRatingState]       = useState(null); // null | "prompt" | "message" | "done"
+  const [ratingVal, setRatingVal]           = useState(0);
+  const [ratingMsg, setRatingMsg]           = useState("");
+  const [ratedSessionId, setRatedSessionId] = useState(null);
+
+  // Testimonials for landing screen
+  const [testimonials, setTestimonials] = useState([]);
+
+  // Legal modals
+  const [legalModal, setLegalModal] = useState(null); // null | "privacy" | "terms"
+  const [termsChecked, setTermsChecked] = useState(false);
 
   // PWA install prompt
   const [deferredInstall, setDeferredInstall] = useState(null);
@@ -410,8 +568,65 @@ export default function MindTranceformApp() {
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [generating]);
 
+  // Fetch public testimonials on first load
+  useEffect(() => { fetchTestimonials(); }, []);
+
+  // Auto-load WL admin data when navigating to that view
+  useEffect(() => {
+    if (view === "wladmin" && user) loadWlAdmin();
+  }, [view]);
+
+  // Clear rating timer on view change away from result
+  useEffect(() => {
+    if (view !== "result") {
+      clearTimeout(ratingTimerRef.current);
+    }
+  }, [view]);
+
   // Auth state + Stripe return handling
   useEffect(() => {
+    // Store referral code from URL
+    const refCode = new URLSearchParams(window.location.search).get("ref");
+    if (refCode) localStorage.setItem("mt_referral_code", refCode);
+
+    // Detect white label branding (domain or ?wl= param)
+    async function detectWhiteLabel() {
+      const params = new URLSearchParams(window.location.search);
+      const wlId = params.get("wl");
+      if (wlId) {
+        try {
+          const res = await fetch(`${BACKEND_URL}/whitelabel/${wlId}`);
+          const data = await res.json();
+          if (data.success && data.account.active) setWhiteLabel(data.account);
+        } catch {}
+        return;
+      }
+      const hostname = window.location.hostname;
+      const ownHosts = ["mindtranceform.com", "app.mindtranceform.com", "localhost", "127.0.0.1"];
+      if (!ownHosts.includes(hostname)) {
+        try {
+          const res = await fetch(`${BACKEND_URL}/whitelabel/domain/${encodeURIComponent(hostname)}`);
+          const data = await res.json();
+          if (data.success) setWhiteLabel(data.account);
+        } catch {}
+      }
+    }
+    detectWhiteLabel();
+
+    // Path-based routing for WL pages (before auth check)
+    const path = window.location.pathname;
+    if (path === "/whitelabel" || path.startsWith("/whitelabel")) {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("registered") === "true") {
+        setWlAdminMsg("Payment successful! Your white label account is now active.");
+      }
+      setView("whitelabel");
+    } else if (path === "/admin") {
+      setView("wladmin");
+    } else if (path === "/corporate") {
+      setView("corporate");
+    }
+
     // Handle Stripe success redirect
     const params = new URLSearchParams(window.location.search);
     const isPaymentSuccess = params.get("payment") === "success";
@@ -438,6 +653,11 @@ export default function MindTranceformApp() {
       setAuthReady(true);
       if (isPaymentSuccess && session?.user) {
         fetch(`${BACKEND_URL}/user/subscribe`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }).catch(() => {});
+        // Process referral reward if this user was referred
+        fetch(`${BACKEND_URL}/referral/reward`, {
           method: "POST",
           headers: { Authorization: `Bearer ${session.access_token}` },
         }).catch(() => {});
@@ -477,8 +697,20 @@ export default function MindTranceformApp() {
     setAuthError("");
     let error;
     if (authMode === "signup") {
-      ({ error } = await supabase.auth.signUp({ email: authEmail, password: authPassword }));
-      if (!error) setAuthError("Check your email to confirm your account, then log in.");
+      const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
+      error = signUpErr;
+      if (!error) {
+        setAuthError("Check your email to confirm your account, then log in.");
+        // Track referral if present
+        const refCode = localStorage.getItem("mt_referral_code");
+        if (refCode && signUpData?.session?.access_token) {
+          fetch(`${BACKEND_URL}/referral/track`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${signUpData.session.access_token}` },
+            body: JSON.stringify({ referral_code: refCode }),
+          }).then(() => localStorage.removeItem("mt_referral_code")).catch(() => {});
+        }
+      }
     } else {
       ({ error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword }));
     }
@@ -655,6 +887,7 @@ export default function MindTranceformApp() {
           idealLife: form.idealLife,
           affirmationStyle: form.affirmationStyle,
           backgroundIntensity: form.backgroundIntensity,
+          white_label_id: whiteLabel?.id || null,
         }),
       });
       const data = await response.json();
@@ -704,14 +937,108 @@ export default function MindTranceformApp() {
     else setStep((p) => p - 1);
   }
 
+  // ── WL ADMIN FUNCTIONS (component-level to avoid hook violations) ────────────
+  async function loadWlAdmin() {
+    if (!user) { setView("auth"); return; }
+    setWlAdminBusy(true); setWlAdminMsg("");
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/whitelabel/admin`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setWlAdmin(data);
+        setWlAdminEdit({
+          brand_name:     data.account.brand_name     || "",
+          brand_color:    data.account.brand_color    || "#a8d8c8",
+          brand_logo_url: data.account.brand_logo_url || "",
+          custom_domain:  data.account.custom_domain  || "",
+        });
+      } else {
+        setWlAdminMsg(data.error || "No white label account found.");
+      }
+    } catch { setWlAdminMsg("Failed to load account."); }
+    setWlAdminBusy(false);
+  }
+
+  async function saveWlAdmin(e) {
+    e.preventDefault();
+    if (!wlAdmin) return;
+    setWlAdminBusy(true); setWlAdminMsg("");
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/whitelabel/${wlAdmin.account.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(wlAdminEdit),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setWlAdmin((prev) => ({ ...prev, account: data.account }));
+        setWlAdminMsg("Saved successfully.");
+      } else {
+        setWlAdminMsg(data.error || "Save failed.");
+      }
+    } catch { setWlAdminMsg("Save failed."); }
+    setWlAdminBusy(false);
+  }
+
+  // ── REFERRAL FUNCTIONS ────────────────────────────────────────────────────
+  async function fetchReferralStats() {
+    if (!user) return;
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/referral/code/${user.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setReferralCode(data.code);
+        setReferralStats({ total: data.total, joined: data.joined, monthsEarned: data.monthsEarned });
+      }
+    } catch {}
+  }
+
+  // ── TESTIMONIAL FUNCTIONS ─────────────────────────────────────────────────
+  async function fetchTestimonials() {
+    try {
+      const res = await fetch(`${BACKEND_URL}/testimonials`);
+      const data = await res.json();
+      if (data.success && data.testimonials.length > 0) setTestimonials(data.testimonials);
+    } catch {}
+  }
+
+  async function submitRating() {
+    if (!ratingVal) return;
+    try {
+      const token = await getToken();
+      await fetch(`${BACKEND_URL}/testimonial`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          user_name: form.name || "Anonymous",
+          program:   form.program || null,
+          rating:    ratingVal,
+          message:   ratingMsg || null,
+        }),
+      });
+    } catch {}
+    setRatingState("done");
+    clearTimeout(ratingTimerRef.current);
+  }
+
   if (!authReady) return null;
+
+  const modal = legalModal ? <LegalModal type={legalModal} onClose={() => setLegalModal(null)} /> : null;
+  const footer = <Footer onOpenModal={setLegalModal} />;
 
   // ── AUTH ──
   if (view === "auth") return (
     <div style={S.root}>
       <StarField />
       <div style={S.wrap}>
-        <Logo sub />
+        <Logo sub brand={whiteLabel} />
         <div style={S.card}>
           {authForgot ? (
             <>
@@ -743,7 +1070,7 @@ export default function MindTranceformApp() {
               <form onSubmit={handleAuth}>
                 <input style={{ ...S.input, marginBottom: "0.75rem" }} type="email" placeholder="Email"
                   value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required autoFocus />
-                <input style={{ ...S.input, marginBottom: authMode === "login" ? "0.4rem" : "1.25rem" }}
+                <input style={{ ...S.input, marginBottom: authMode === "login" ? "0.4rem" : "1rem" }}
                   type="password" placeholder="Password (min 6 characters)"
                   value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required />
                 {authMode === "login" && (
@@ -754,7 +1081,35 @@ export default function MindTranceformApp() {
                     </button>
                   </div>
                 )}
-                <button style={{ ...S.btnPrimary, width: "100%" }} type="submit" disabled={authBusy}>
+                {authMode === "signup" && (
+                  <div
+                    style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "1.25rem" }}
+                    onClick={() => setTermsChecked((v) => !v)}
+                  >
+                    <div style={{
+                      width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
+                      border: termsChecked ? "none" : "1.5px solid rgba(168,216,200,0.4)",
+                      background: termsChecked ? "#a8d8c8" : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 11, color: "#07091a", transition: "all 0.2s",
+                    }}>
+                      {termsChecked ? "✓" : ""}
+                    </div>
+                    <span style={{ fontSize: "0.8rem", color: "#8a879e", lineHeight: 1.55 }}>
+                      I agree to the{" "}
+                      <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
+                        onClick={(e) => { e.stopPropagation(); setLegalModal("terms"); }}>Terms of Service</span>
+                      {" "}and{" "}
+                      <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
+                        onClick={(e) => { e.stopPropagation(); setLegalModal("privacy"); }}>Privacy Policy</span>
+                    </span>
+                  </div>
+                )}
+                <button
+                  style={{ ...S.btnPrimary, width: "100%", opacity: authMode === "signup" && !termsChecked ? 0.4 : 1, cursor: authMode === "signup" && !termsChecked ? "not-allowed" : "pointer" }}
+                  type="submit"
+                  disabled={authBusy || (authMode === "signup" && !termsChecked)}
+                >
                   {authBusy ? "..." : authMode === "login" ? "Sign In" : "Create Account"}
                 </button>
               </form>
@@ -776,7 +1131,48 @@ export default function MindTranceformApp() {
             </>
           )}
         </div>
+
+        {/* Testimonials */}
+        {(() => {
+          const PLACEHOLDERS = [
+            { user_name: "Sarah",   program: "Sleep",            rating: 5, message: "Hearing my name in the meditation changed everything. It felt like it was made just for me." },
+            { user_name: "James",   program: "Stress & Anxiety", rating: 5, message: "I've tried every meditation app. This is the first one that actually feels personal." },
+            { user_name: "Maria",   program: "Sleep",            rating: 5, message: "I listen every night before bed. My sleep has completely changed in 3 weeks." },
+            { user_name: "David",   program: "Abundance",        rating: 4, message: "The abundance session is powerful. I listen every morning before work." },
+            { user_name: "Lisa",    program: "Stress & Anxiety", rating: 5, message: "I was skeptical about hypnosis but this is genuinely relaxing and effective." },
+            { user_name: "Michael", program: "Stress & Anxiety", rating: 5, message: "My therapist recommended trying this alongside our sessions. Best decision." },
+          ];
+          const items = testimonials.length > 0 ? testimonials : PLACEHOLDERS;
+          return (
+            <div style={{ marginTop: "2rem", paddingBottom: "1rem" }}>
+              <div style={{ fontSize: "0.68rem", letterSpacing: "0.22em", textTransform: "uppercase", color: "#8a879e", textAlign: "center", marginBottom: "1rem" }}>
+                What people are saying
+              </div>
+              <div style={{ display: "grid", gap: "0.65rem" }}>
+                {items.slice(0, 6).map((t, i) => (
+                  <div key={i} style={{ ...S.card, padding: "1rem 1.1rem", margin: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
+                      <div style={{ display: "flex", gap: 1 }}>
+                        {[1,2,3,4,5].map((n) => (
+                          <span key={n} style={{ color: n <= t.rating ? "#d4b896" : "rgba(255,255,255,0.15)", fontSize: "0.7rem" }}>★</span>
+                        ))}
+                      </div>
+                      <span style={{ fontSize: "0.68rem", color: "#8a879e", letterSpacing: "0.08em" }}>
+                        {t.user_name} · {t.program}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "0.82rem", color: "#c8c5d8", lineHeight: 1.65, fontStyle: "italic" }}>
+                      "{t.message}"
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+        {footer}
       </div>
+      {modal}
     </div>
   );
 
@@ -786,7 +1182,7 @@ export default function MindTranceformApp() {
     <div style={S.root}>
       <StarField />
       <div style={S.wrap}>
-        <Logo />
+        <Logo brand={whiteLabel} />
         <div style={S.card}>
           <div style={S.genWrap}>
             <PulseRing />
@@ -822,7 +1218,9 @@ export default function MindTranceformApp() {
             </div>
           </div>
         </div>
+        {footer}
       </div>
+      {modal}
     </div>
   );
 
@@ -833,7 +1231,7 @@ export default function MindTranceformApp() {
       <div style={S.root}>
         <StarField />
         <div style={S.wrap}>
-          <Logo />
+          <Logo brand={whiteLabel} />
           <div style={S.card}>
             <div style={{ fontSize: "1.5rem", fontWeight: 300, marginBottom: "0.4rem" }}>
               Your session is ready{form.name ? `, ${form.name}` : ""}
@@ -843,7 +1241,17 @@ export default function MindTranceformApp() {
             </div>
             <div style={S.tagRow}>{tags.map((t) => <div key={t} style={S.tag}>{t}</div>)}</div>
             {result.audioUrl
-              ? <><audio controls style={S.audio} src={result.audioUrl} /><div style={S.audioNote}>Your personalized audio session</div></>
+              ? <><audio controls style={S.audio} src={result.audioUrl}
+                  onPlay={() => {
+                    if (ratedSessionId === result.audioUrl) return; // already shown for this session
+                    clearTimeout(ratingTimerRef.current);
+                    ratingTimerRef.current = setTimeout(() => {
+                      setRatingState("prompt");
+                      setRatingVal(0); setRatingMsg("");
+                    }, 60000);
+                  }}
+                  onPause={() => clearTimeout(ratingTimerRef.current)}
+                /><div style={S.audioNote}>Your personalized audio session</div></>
               : <div style={S.infoBox}>{result.audioUnavailable ? "Audio is temporarily unavailable — your personalized script is ready below." : "Your personalized script is ready below."}</div>
             }
             <div style={S.scriptBox}>{result.script}</div>
@@ -907,8 +1315,65 @@ export default function MindTranceformApp() {
                 </div>
               </div>
             )}
+
+            {/* ── Rating Prompt ── */}
+            {ratingState === "prompt" && (
+              <div style={{ ...S.infoBox, marginTop: "1.25rem", borderColor: "rgba(201,168,216,0.25)" }}>
+                <div style={{ fontSize: "0.92rem", color: "#e8e6f0", marginBottom: "0.75rem" }}>How did your session feel?</div>
+                <div style={{ display: "flex", gap: "0.4rem", justifyContent: "center", marginBottom: "0.75rem" }}>
+                  {[1,2,3,4,5].map((n) => (
+                    <button key={n} onClick={() => setRatingVal(n)}
+                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1.6rem",
+                        color: n <= ratingVal ? "#d4b896" : "#8a879e", transition: "color 0.15s" }}>★</button>
+                  ))}
+                </div>
+                <div style={S.row}>
+                  <button style={S.btn} onClick={() => {
+                    setRatingState("done");
+                    setRatedSessionId(result?.audioUrl);
+                    clearTimeout(ratingTimerRef.current);
+                  }}>Skip</button>
+                  <button style={{ ...S.btnPrimary, borderColor: "#c9a8d8", color: "#c9a8d8" }}
+                    disabled={!ratingVal}
+                    onClick={() => {
+                      if (ratingVal >= 4) { setRatingState("message"); }
+                      else { submitRating(); setRatedSessionId(result?.audioUrl); }
+                    }}>
+                    {ratingVal >= 4 || !ratingVal ? "Next →" : "Submit"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {ratingState === "message" && (
+              <div style={{ ...S.infoBox, marginTop: "1.25rem", borderColor: "rgba(201,168,216,0.25)" }}>
+                <div style={{ fontSize: "0.88rem", color: "#e8e6f0", marginBottom: "0.5rem" }}>Tell us about your experience</div>
+                <div style={{ fontSize: "0.75rem", color: "#8a879e", marginBottom: "0.75rem" }}>
+                  We may feature it on our site — first name only, anonymous.
+                </div>
+                <textarea style={{ ...S.input, minHeight: 72, resize: "vertical", marginBottom: "0.75rem" }}
+                  placeholder="Your experience..."
+                  value={ratingMsg}
+                  onChange={(e) => setRatingMsg(e.target.value)} />
+                <div style={S.row}>
+                  <button style={S.btn} onClick={() => {
+                    submitRating(); setRatedSessionId(result?.audioUrl);
+                  }}>Skip</button>
+                  <button style={{ ...S.btnPrimary, borderColor: "#c9a8d8", color: "#c9a8d8" }}
+                    onClick={() => { submitRating(); setRatedSessionId(result?.audioUrl); }}>
+                    Submit ✦
+                  </button>
+                </div>
+              </div>
+            )}
+            {ratingState === "done" && (
+              <div style={{ ...S.infoBox, marginTop: "1.25rem", borderColor: "rgba(168,216,200,0.2)", textAlign: "center" }}>
+                <span style={{ color: "#a8d8c8", fontSize: "0.88rem" }}>✦ Thank you for your feedback</span>
+              </div>
+            )}
           </div>
+          {footer}
         </div>
+        {modal}
       </div>
     );
   }
@@ -918,7 +1383,7 @@ export default function MindTranceformApp() {
     <div style={S.root}>
       <StarField />
       <div style={S.wrap}>
-        <Logo />
+        <Logo brand={whiteLabel} />
         <div style={S.card}>
           <div style={{ fontSize: "1.4rem", fontWeight: 300, marginBottom: "0.5rem" }}>
             You've used your free session
@@ -947,7 +1412,9 @@ export default function MindTranceformApp() {
           ))}
         </div>
         <button style={S.resetBtn} onClick={() => setView("home")}>← Back to home</button>
+        {footer}
       </div>
+      {modal}
     </div>
   );
 
@@ -968,7 +1435,7 @@ export default function MindTranceformApp() {
       <div style={S.root}>
         <StarField />
         <div style={S.wrap}>
-          <Logo />
+          <Logo brand={whiteLabel} />
           <div style={S.card}>
             <div style={{ fontSize: "1.6rem", fontWeight: 300, marginBottom: "0.4rem" }}>Before You Listen</div>
             <div style={{ height: "0.5px", background: "rgba(255,255,255,0.08)", margin: "1rem 0 1.5rem" }} />
@@ -1032,7 +1499,9 @@ export default function MindTranceformApp() {
           {safetyReturn === "home" && (
             <button style={S.resetBtn} onClick={() => setView("home")}>← Back to home</button>
           )}
+          {footer}
         </div>
+        {modal}
       </div>
     );
   }
@@ -1042,7 +1511,7 @@ export default function MindTranceformApp() {
     <div style={S.root}>
       <StarField />
       <div style={S.wrap}>
-        <Logo />
+        <Logo brand={whiteLabel} />
         <div style={S.card}>
           <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "1.25rem" }}>My Sessions</div>
           {sessionsLoading && <div style={{ color: "#8a879e", textAlign: "center", padding: "2rem 0" }}>Loading...</div>}
@@ -1057,7 +1526,9 @@ export default function MindTranceformApp() {
           ))}
         </div>
         <button style={S.resetBtn} onClick={() => setView("home")}>← Back to home</button>
+        {footer}
       </div>
+      {modal}
     </div>
   );
 
@@ -1066,7 +1537,7 @@ export default function MindTranceformApp() {
     <div style={S.root}>
       <StarField />
       <div style={S.wrap}>
-        <Logo />
+        <Logo brand={whiteLabel} />
         <div style={S.card}>
           <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "0.3rem" }}>{selectedSession.title}</div>
           <div style={{ fontSize: "0.75rem", color: "#8a879e", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "1.25rem" }}>
@@ -1110,16 +1581,192 @@ export default function MindTranceformApp() {
           </div>
         </div>
         <button style={S.resetBtn} onClick={() => { setSelectedSession(null); setView("sessions"); }}>← Back to sessions</button>
+        {footer}
       </div>
+      {modal}
     </div>
   );
+
+  // ── WHITE LABEL PRICING ──
+  if (view === "whitelabel") {
+    const WL_PLANS = [  // eslint-disable-line no-unused-vars
+      { id: "basic",        label: "Basic",        price: "$49",  period: "/mo", accent: "#8a879e",
+        features: ["Up to 100 client sessions/mo", "Custom brand name & color", "Shareable session link", "Email support"] },
+      { id: "professional", label: "Professional", price: "$99",  period: "/mo", accent: "#a8d8c8",
+        features: ["Unlimited client sessions", "Custom logo", "Custom domain support", "Priority support", "Session analytics"] },
+      { id: "enterprise",   label: "Enterprise",   price: "$199", period: "/mo", accent: "#c9a8d8",
+        features: ["Everything in Professional", "White-glove onboarding", "Dedicated account manager", "Custom integrations", "SLA guarantee"] },
+      { id: "corporate",    label: "Corporate",    price: "Custom", period: "", accent: "#d4b896",
+        features: ["Team of 10+ coaches/therapists", "Custom contract & invoicing", "On-site or virtual training", "Full API access", "Contact us to discuss"] },
+    ];
+
+    async function handleWlSignup(e) {
+      e.preventDefault();
+      if (!wlForm.brand_name.trim() || !wlForm.email.trim() || !wlSelectedPlan) {
+        setWlError("Please fill in all fields and choose a plan."); return;
+      }
+      if (wlSelectedPlan === "corporate") { setView("corporate"); return; }
+      setWlBusy(true); setWlError("");
+      try {
+        const res = await fetch(`${BACKEND_URL}/whitelabel/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...wlForm, plan: wlSelectedPlan }),
+        });
+        const data = await res.json();
+        if (data.checkoutUrl) { window.location.href = data.checkoutUrl; return; }
+        setWlError(data.error || "Something went wrong.");
+      } catch { setWlError("Something went wrong. Please try again."); }
+      setWlBusy(false);
+    }
+
+    return (
+      <div style={S.root}>
+        <StarField />
+        <div style={S.wrap}>
+          <Logo sub brand={whiteLabel} />
+          <div style={S.card}>
+            <div style={{ fontSize: "1.5rem", fontWeight: 300, marginBottom: "0.35rem" }}>White Label Mind Tranceform</div>
+            <div style={{ fontSize: "0.85rem", color: "#8a879e", lineHeight: 1.7, marginBottom: "1.5rem" }}>
+              Offer personalized AI meditation and hypnosis sessions under your own brand. Your clients never see our name.
+            </div>
+            {WL_PLANS.map((p) => (
+              <div key={p.id}
+                style={{
+                  ...S.sessionItem,
+                  padding: "1.1rem 1.25rem",
+                  marginBottom: "0.75rem",
+                  border: wlSelectedPlan === p.id ? `0.5px solid ${p.accent}` : "0.5px solid rgba(255,255,255,0.08)",
+                  background: wlSelectedPlan === p.id ? `rgba(${p.accent === "#a8d8c8" ? "168,216,200" : p.accent === "#c9a8d8" ? "201,168,216" : "212,184,150"},0.06)` : "rgba(255,255,255,0.04)",
+                  cursor: "pointer",
+                }}
+                onClick={() => setWlSelectedPlan(p.id)}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.4rem" }}>
+                  <div style={{ fontSize: "1rem", color: "#e8e6f0" }}>{p.label}</div>
+                  <div style={{ fontSize: "1.05rem", color: p.accent }}>
+                    {p.price}<span style={{ fontSize: "0.72rem", color: "#8a879e" }}>{p.period}</span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem 1rem", marginBottom: "0.4rem" }}>
+                  {p.features.map((f) => (
+                    <div key={f} style={{ fontSize: "0.75rem", color: "#8a879e", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                      <span style={{ color: p.accent, fontSize: "0.6rem" }}>◦</span>{f}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <div style={{
+                    width: 18, height: 18, borderRadius: "50%", flexShrink: 0,
+                    border: wlSelectedPlan === p.id ? "none" : "1.5px solid rgba(255,255,255,0.2)",
+                    background: wlSelectedPlan === p.id ? p.accent : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 10, color: "#07091a",
+                  }}>{wlSelectedPlan === p.id ? "✓" : ""}</div>
+                </div>
+              </div>
+            ))}
+            <div style={{ height: "0.5px", background: "rgba(255,255,255,0.08)", margin: "1.5rem 0 1.25rem" }} />
+            <form onSubmit={handleWlSignup}>
+              <input style={{ ...S.input, marginBottom: "0.75rem" }} type="text" placeholder="Brand name"
+                value={wlForm.brand_name} onChange={(e) => setWlForm((f) => ({ ...f, brand_name: e.target.value }))} />
+              <input style={{ ...S.input, marginBottom: "0.75rem" }} type="email" placeholder="Your email"
+                value={wlForm.email} onChange={(e) => setWlForm((f) => ({ ...f, email: e.target.value }))} />
+              {wlError && <div style={S.errorBox}>{wlError}</div>}
+              <button style={{ ...S.btnPrimary, width: "100%" }} type="submit" disabled={wlBusy}>
+                {wlBusy ? "..." : wlSelectedPlan === "corporate" ? "Contact Sales →" : "Get Started →"}
+              </button>
+            </form>
+          </div>
+          <button style={S.resetBtn} onClick={() => setView(user ? "home" : "auth")}>← Back</button>
+          {footer}
+        </div>
+        {modal}
+      </div>
+    );
+  }
+
+  // ── CORPORATE INQUIRY ──
+  if (view === "corporate") {
+    async function handleCorpSubmit(e) {
+      e.preventDefault();
+      if (!corpForm.name.trim() || !corpForm.email.trim() || !corpForm.company.trim()) {
+        setCorpError("Name, email, and company are required."); return;
+      }
+      setCorpBusy(true); setCorpError("");
+      try {
+        const res = await fetch(`${BACKEND_URL}/corporate-inquiry`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(corpForm),
+        });
+        const data = await res.json();
+        if (data.success) { setCorpDone(true); return; }
+        setCorpError(data.error || "Something went wrong.");
+      } catch { setCorpError("Something went wrong. Please try again."); }
+      setCorpBusy(false);
+    }
+    const cf = (key, placeholder, type = "text") => (
+      <input style={{ ...S.input, marginBottom: "0.75rem" }} type={type} placeholder={placeholder}
+        value={corpForm[key]} onChange={(e) => setCorpForm((f) => ({ ...f, [key]: e.target.value }))} />
+    );
+    return (
+      <div style={S.root}>
+        <StarField />
+        <div style={S.wrap}>
+          <Logo sub brand={whiteLabel} />
+          <div style={S.card}>
+            {corpDone ? (
+              <div style={{ textAlign: "center", padding: "2rem 0" }}>
+                <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>✦</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "0.75rem" }}>Message received</div>
+                <div style={{ fontSize: "0.88rem", color: "#8a879e", lineHeight: 1.7, marginBottom: "1.5rem" }}>
+                  We'll be in touch at {corpForm.email} within 24 hours.
+                </div>
+                <button style={{ ...S.btnPrimary, padding: "0.7rem 2rem" }} onClick={() => setView(user ? "home" : "auth")}>
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: "1.5rem", fontWeight: 300, marginBottom: "0.35rem" }}>Corporate Inquiry</div>
+                <div style={{ fontSize: "0.85rem", color: "#8a879e", lineHeight: 1.7, marginBottom: "1.5rem" }}>
+                  For teams of 10+ coaches, therapists, or wellness brands. We'll build a plan around your needs.
+                </div>
+                {corpError && <div style={S.errorBox}>{corpError}</div>}
+                <form onSubmit={handleCorpSubmit}>
+                  {cf("name", "Your name *")}
+                  {cf("email", "Work email *", "email")}
+                  {cf("company", "Company / organization *")}
+                  {cf("role", "Your role")}
+                  {cf("teamSize", "Team size (approx.)")}
+                  {cf("useCase", "Intended use case")}
+                  {cf("timeline", "Timeline / urgency")}
+                  <textarea style={{ ...S.input, marginBottom: "0.75rem", minHeight: 90, resize: "vertical" }}
+                    placeholder="Anything else we should know?"
+                    value={corpForm.message}
+                    onChange={(e) => setCorpForm((f) => ({ ...f, message: e.target.value }))} />
+                  <button style={{ ...S.btnPrimary, width: "100%" }} type="submit" disabled={corpBusy}>
+                    {corpBusy ? "Sending..." : "Send Inquiry →"}
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+          <button style={S.resetBtn} onClick={() => setView("whitelabel")}>← Back to plans</button>
+          {footer}
+        </div>
+        {modal}
+      </div>
+    );
+  }
 
   // ── GENERATION ERROR ──
   if (view === "genError") return (
     <div style={S.root}>
       <StarField />
       <div style={S.wrap}>
-        <Logo />
+        <Logo brand={whiteLabel} />
         <div style={S.card}>
           <div style={{ textAlign: "center", padding: "1rem 0" }}>
             <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "0.75rem" }}>Something went wrong</div>
@@ -1130,7 +1777,9 @@ export default function MindTranceformApp() {
             </div>
           </div>
         </div>
+        {footer}
       </div>
+      {modal}
     </div>
   );
 
@@ -1153,7 +1802,7 @@ export default function MindTranceformApp() {
       <div style={S.root}>
         <StarField />
         <div style={S.wrap}>
-          <Logo />
+          <Logo brand={whiteLabel} />
           <div style={S.card}>
             <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "1.5rem" }}>Account</div>
 
@@ -1232,8 +1881,146 @@ export default function MindTranceformApp() {
               </div>
             )}
           </div>
+
+          {/* ── Referral Section ── */}
+          {user?.email && (
+            <div style={{ ...S.card, marginTop: "0.75rem" }}>
+              <div style={{ fontSize: "1rem", fontWeight: 300, marginBottom: "0.4rem", color: "#e8e6f0" }}>Refer a Friend ✦</div>
+              <div style={{ fontSize: "0.8rem", color: "#8a879e", lineHeight: 1.65, marginBottom: "1rem" }}>
+                Give a friend their first session free. When they subscribe, you get 1 free month of Premium.
+              </div>
+
+              {/* Stats */}
+              {referralCode && (
+                <div style={{ display: "flex", gap: "0.6rem", marginBottom: "1rem" }}>
+                  {[
+                    { label: "Referred",  value: referralStats.total },
+                    { label: "Joined",    value: referralStats.joined },
+                    { label: "Mo. Earned", value: referralStats.monthsEarned },
+                  ].map((s) => (
+                    <div key={s.label} style={{ flex: 1, background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "0.6rem", textAlign: "center", border: "0.5px solid rgba(255,255,255,0.07)" }}>
+                      <div style={{ fontSize: "1.15rem", fontWeight: 400, color: "#a8d8c8" }}>{s.value}</div>
+                      <div style={{ fontSize: "0.62rem", color: "#8a879e", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 2 }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Link */}
+              {!referralCode && (
+                <button style={{ ...S.btnPrimary, width: "100%", marginBottom: "0.75rem" }} onClick={fetchReferralStats}>
+                  Get My Referral Link
+                </button>
+              )}
+              {referralCode && (() => {
+                const refLink = `https://app.mindtranceform.com?ref=${referralCode}`;
+                const refText = `I've been using Mind Tranceform for personalized AI meditations — try it free: ${refLink}`;
+                return (
+                  <>
+                    <div style={{ ...S.input, marginBottom: "0.75rem", fontSize: "0.75rem", color: "#8a879e", wordBreak: "break-all" }}>
+                      {refLink}
+                    </div>
+                    <button style={{ ...S.btnPrimary, width: "100%", marginBottom: "0.6rem" }}
+                      onClick={() => { navigator.clipboard.writeText(refLink); }}>
+                      Copy Link
+                    </button>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
+                      <a href={`https://wa.me/?text=${encodeURIComponent(refText)}`} target="_blank" rel="noreferrer"
+                        style={{ ...S.btn, textAlign: "center", textDecoration: "none", display: "block", padding: "0.6rem 0", fontSize: "0.78rem" }}>
+                        WhatsApp
+                      </a>
+                      <a href={`sms:?body=${encodeURIComponent(refText)}`}
+                        style={{ ...S.btn, textAlign: "center", textDecoration: "none", display: "block", padding: "0.6rem 0", fontSize: "0.78rem" }}>
+                        iMessage
+                      </a>
+                      <a href={`mailto:?subject=Try Mind Tranceform&body=${encodeURIComponent(refText)}`}
+                        style={{ ...S.btn, textAlign: "center", textDecoration: "none", display: "block", padding: "0.6rem 0", fontSize: "0.78rem" }}>
+                        Email
+                      </a>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
           <button style={S.resetBtn} onClick={() => setView("home")}>← Back to home</button>
+          {footer}
         </div>
+        {modal}
+      </div>
+    );
+  }
+
+  // ── WL ADMIN ──
+  if (view === "wladmin") {
+    const shareLink = wlAdmin ? `${window.location.origin}?wl=${wlAdmin.account.id}` : "";
+
+    return (
+      <div style={S.root}>
+        <StarField />
+        <div style={S.wrap}>
+          <Logo sub brand={whiteLabel} />
+          <div style={S.card}>
+            <div style={{ fontSize: "1.4rem", fontWeight: 300, marginBottom: "1.5rem" }}>White Label Dashboard</div>
+            {wlAdminBusy && !wlAdmin && <div style={{ color: "#8a879e", textAlign: "center", padding: "2rem 0" }}>Loading...</div>}
+            {wlAdminMsg && !wlAdmin && <div style={S.infoBox}>{wlAdminMsg}</div>}
+            {!wlAdmin && !wlAdminBusy && (
+              <div style={{ textAlign: "center", padding: "1rem 0" }}>
+                <div style={{ fontSize: "0.88rem", color: "#8a879e", marginBottom: "1.25rem" }}>No white label account found for this email.</div>
+                <button style={S.btnPrimary} onClick={() => setView("whitelabel")}>Sign Up →</button>
+              </div>
+            )}
+            {wlAdmin && (
+              <>
+                {/* Stats */}
+                <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem" }}>
+                  {[
+                    { label: "Status",    value: wlAdmin.account.active ? "Active" : "Inactive",    color: wlAdmin.account.active ? "#a8d8c8" : "#e87c7c" },
+                    { label: "Plan",      value: wlAdmin.account.plan   || "—",                     color: "#c9a8d8" },
+                    { label: "Sessions",  value: String(wlAdmin.session_count ?? 0),                color: "#e8e6f0" },
+                  ].map((s) => (
+                    <div key={s.label} style={{ flex: 1, background: "rgba(255,255,255,0.04)", borderRadius: 12, padding: "0.85rem", textAlign: "center", border: "0.5px solid rgba(255,255,255,0.08)" }}>
+                      <div style={{ fontSize: "1.1rem", fontWeight: 400, color: s.color }}>{s.value}</div>
+                      <div style={{ fontSize: "0.68rem", color: "#8a879e", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 3 }}>{s.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Share link */}
+                <div style={{ fontSize: "0.7rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#8a879e", marginBottom: "0.4rem" }}>Client link</div>
+                <div style={{ ...S.input, marginBottom: "1.25rem", fontSize: "0.78rem", color: "#8a879e", cursor: "text", wordBreak: "break-all" }}>{shareLink}</div>
+                <button style={{ ...S.btn, width: "100%", marginBottom: "1.5rem" }}
+                  onClick={() => { navigator.clipboard.writeText(shareLink); setWlAdminMsg("Link copied!"); }}>
+                  Copy Client Link
+                </button>
+
+                <div style={{ height: "0.5px", background: "rgba(255,255,255,0.08)", margin: "0 0 1.25rem" }} />
+                <div style={{ fontSize: "1rem", fontWeight: 300, marginBottom: "1rem", color: "#e8e6f0" }}>Brand Settings</div>
+
+                {wlAdminMsg && <div style={S.infoBox}>{wlAdminMsg}</div>}
+                <form onSubmit={saveWlAdmin}>
+                  {[
+                    { key: "brand_name",     placeholder: "Brand name" },
+                    { key: "brand_color",    placeholder: "Brand color (hex, e.g. #a8d8c8)" },
+                    { key: "brand_logo_url", placeholder: "Logo URL (optional)" },
+                    { key: "custom_domain",  placeholder: "Custom domain (e.g. app.yourbrand.com)" },
+                  ].map((f) => (
+                    <input key={f.key} style={{ ...S.input, marginBottom: "0.75rem" }} type="text"
+                      placeholder={f.placeholder} value={wlAdminEdit[f.key]}
+                      onChange={(e) => setWlAdminEdit((prev) => ({ ...prev, [f.key]: e.target.value }))} />
+                  ))}
+                  <button style={{ ...S.btnPrimary, width: "100%" }} type="submit" disabled={wlAdminBusy}>
+                    {wlAdminBusy ? "Saving..." : "Save Changes"}
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
+          <button style={S.resetBtn} onClick={() => setView(user ? "home" : "auth")}>← Back</button>
+          {footer}
+        </div>
+        {modal}
       </div>
     );
   }
@@ -1243,7 +2030,7 @@ export default function MindTranceformApp() {
     <div style={S.root}>
       <StarField />
       <div style={S.wrap}>
-        <Logo sub />
+        <Logo sub brand={whiteLabel} />
         <div style={S.card}>
           {user?.is_anonymous && (
             <div style={{ ...S.infoBox, marginBottom: "1.25rem", textAlign: "center", borderColor: "rgba(201,168,216,0.3)" }}>
@@ -1273,7 +2060,7 @@ export default function MindTranceformApp() {
           <button style={{ ...S.btn, width: "100%", padding: "1rem", marginBottom: "0.75rem" }} onClick={() => { setView("sessions"); fetchSessions(); }}>
             My Sessions
           </button>
-          <button style={{ ...S.btn, width: "100%", padding: "1rem" }} onClick={() => { setView("account"); fetchSubStatus(); setCancelConfirm(false); }}>
+          <button style={{ ...S.btn, width: "100%", padding: "1rem" }} onClick={() => { setView("account"); fetchSubStatus(); fetchReferralStats(); setCancelConfirm(false); }}>
             Account
           </button>
           {!plan && sessionsUsed === 0 && (
@@ -1297,8 +2084,11 @@ export default function MindTranceformApp() {
           )}
         </div>
         <button style={S.resetBtn} onClick={() => { setSafetyReturn("home"); setView("safety"); }}>How to use</button>
+        <button style={S.resetBtn} onClick={() => { setWlAdmin(null); setWlAdminMsg(""); setView("wladmin"); }}>White Label Dashboard</button>
         <button style={S.resetBtn} onClick={handleLogout}>Log out</button>
+        {footer}
       </div>
+      {modal}
     </div>
   );
 
@@ -1309,7 +2099,7 @@ export default function MindTranceformApp() {
     <div style={S.root}>
       <StarField />
       <div style={S.wrap}>
-        <Logo sub />
+        <Logo sub brand={whiteLabel} />
         <div style={S.card}>
           <div style={S.progressBar}><div style={{ ...S.progressFill, width: `${pct}%` }} /></div>
           <div style={S.stepLabel}>Step {current.label}</div>
@@ -1357,7 +2147,9 @@ export default function MindTranceformApp() {
           </div>
         </div>
         {error && <div style={S.errorBox}>⚠ {error}</div>}
+        {footer}
       </div>
+      {modal}
     </div>
   );
 }
