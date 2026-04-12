@@ -625,12 +625,14 @@ export default function MindTranceformApp() {
   const [sessionsUsed, setSessionsUsed] = useState(() => parseInt(localStorage.getItem("mt_sessions_used") || "0"));
 
   // Auth form
-  const [authMode, setAuthMode]         = useState("login");
-  const [authEmail, setAuthEmail]       = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authError, setAuthError]       = useState("");
-  const [authBusy, setAuthBusy]         = useState(false);
-  const [authForgot, setAuthForgot]     = useState(false);
+  const [authMode, setAuthMode]               = useState("login");
+  const [authEmail, setAuthEmail]             = useState("");
+  const [authPassword, setAuthPassword]       = useState("");
+  const [authError, setAuthError]             = useState("");
+  const [authBusy, setAuthBusy]               = useState(false);
+  const [authForgot, setAuthForgot]           = useState(false);
+  const [signupConfirmSent, setSignupConfirmSent] = useState(false);
+  const [resendStatus, setResendStatus]       = useState("");
 
   // Safety
   const [safetyAccepted, setSafetyAccepted] = useState(() => !!localStorage.getItem("mt_safety_accepted"));
@@ -869,7 +871,7 @@ export default function MindTranceformApp() {
       const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
       error = signUpErr;
       if (!error) {
-        setAuthError("Check your email to confirm your account, then log in.");
+        setSignupConfirmSent(true);
         // Track referral if present
         const refCode = localStorage.getItem("mt_referral_code");
         if (refCode && signUpData?.session?.access_token) {
@@ -897,6 +899,12 @@ export default function MindTranceformApp() {
     if (error) setAuthError(error.message);
     else setAuthError("Check your email for a password reset link.");
     setAuthBusy(false);
+  }
+
+  async function handleResendConfirmation() {
+    setResendStatus("sending");
+    const { error } = await supabase.auth.resend({ type: "signup", email: authEmail });
+    setResendStatus(error ? "error" : "sent");
   }
 
   async function handleGuestLogin() {
@@ -1339,7 +1347,54 @@ export default function MindTranceformApp() {
       <div style={S.wrap}>
         <Logo sub brand={whiteLabel} />
         <div style={S.card}>
-          {authForgot ? (
+          {signupConfirmSent ? (
+            <>
+              {/* ── Confirmation sent screen ── */}
+              <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+                <div style={{
+                  width: 52, height: 52, borderRadius: "50%",
+                  background: "rgba(168,216,200,0.15)", border: "1.5px solid rgba(168,216,200,0.4)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: "1.5rem", margin: "0 auto 1rem",
+                }}>✓</div>
+                <div style={{ fontSize: "1.2rem", fontWeight: 300, color: "#e8e6f0", marginBottom: "0.5rem" }}>
+                  Check your email
+                </div>
+                <div style={{ fontSize: "0.85rem", color: "#8a879e", lineHeight: 1.6 }}>
+                  We sent a confirmation link to
+                </div>
+                <div style={{ fontSize: "0.9rem", color: "#a8d8c8", marginTop: "0.3rem", wordBreak: "break-all" }}>
+                  {authEmail}
+                </div>
+                <div style={{ fontSize: "0.82rem", color: "#8a879e", marginTop: "0.75rem", lineHeight: 1.6 }}>
+                  Click the link to activate your account,<br />then come back here to sign in.
+                </div>
+              </div>
+              {resendStatus === "sent" && (
+                <div style={{ ...S.infoBox, marginBottom: "0.75rem" }}>Confirmation email resent ✓</div>
+              )}
+              {resendStatus === "error" && (
+                <div style={{ ...S.errorBox, marginBottom: "0.75rem" }}>Failed to resend — try again in a moment.</div>
+              )}
+              <button
+                style={{ ...S.btnPrimary, width: "100%", marginBottom: "0.75rem", opacity: resendStatus === "sending" ? 0.5 : 1 }}
+                onClick={handleResendConfirmation}
+                disabled={resendStatus === "sending"}
+              >
+                {resendStatus === "sending" ? "Sending..." : "Resend confirmation email"}
+              </button>
+              <div style={{ textAlign: "center" }}>
+                <button style={S.resetBtn} onClick={() => {
+                  setSignupConfirmSent(false);
+                  setAuthMode("login");
+                  setAuthError("");
+                  setResendStatus("");
+                }}>
+                  ← Back to Sign In
+                </button>
+              </div>
+            </>
+          ) : authForgot ? (
             <>
               <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "0.4rem", textAlign: "center" }}>Reset password</div>
               <div style={{ fontSize: "0.8rem", color: "#8a879e", textAlign: "center", marginBottom: "1.5rem" }}>
@@ -1432,6 +1487,7 @@ export default function MindTranceformApp() {
         </div>
 
         {/* Testimonials */}
+
         {(() => {
           const PLACEHOLDERS = [
             { user_name: "Sarah",   program: "Sleep",            rating: 5, message: "Hearing my name in the meditation changed everything. It felt like it was made just for me." },
