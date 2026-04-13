@@ -24,12 +24,14 @@ function getProgramOptions(plan) {
 }
 
 const VOICES = [
-  { value: "Female Calm",   icon: "◌", label: "Female Calm",        sub: "Warm, nurturing, soft" },
-  { value: "Female Warm",   icon: "◍", label: "Female Warm",        sub: "Bright, soothing, uplifting" },
-  { value: "Male Calm",     icon: "◎", label: "Male Calm",          sub: "Grounded, steady, assured" },
-  { value: "Male Smooth",   icon: "◉", label: "Male Smooth",        sub: "Gentle, clear, approachable" },
-  { value: "Male Deep",     icon: "●", label: "Male Deep Hypnosis", sub: "Rich, resonant, deeply immersive" },
-  { value: "Male Resonant", icon: "◈", label: "Male Resonant",      sub: "Bold, commanding, hypnotic" },
+  { value: "Female Calm",        icon: "◌", label: "Female Calm",        sub: "Warm, nurturing, soft — ideal for daily meditation" },
+  { value: "Female Warm",        icon: "◍", label: "Female Warm",        sub: "Bright, soothing, uplifting — great for affirmations" },
+  { value: "Female Whisper",     icon: "◦", label: "Female Whisper",     sub: "Very soft and breathy — perfect for sleep sessions" },
+  { value: "Female British",     icon: "◉", label: "Female British",     sub: "Calm British accent — clear, composed, reassuring" },
+  { value: "Male Calm",          icon: "◎", label: "Male Calm",          sub: "Grounded, steady, assured — neutral and trustworthy" },
+  { value: "Male Deep Hypnosis", icon: "●", label: "Male Deep Hypnosis", sub: "Rich, resonant, deeply immersive — ideal for trance" },
+  { value: "Male Warm",          icon: "◈", label: "Male Warm",          sub: "Friendly, approachable, clear — great for motivation" },
+  { value: "Male British",       icon: "◇", label: "Male British",       sub: "Calm British accent — smooth, measured, authoritative" },
 ];
 
 const BACKGROUNDS = [
