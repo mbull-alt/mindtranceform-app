@@ -573,13 +573,13 @@ function OptionList({ options, selected, onSelect, onLockedSelect, onPreview, pr
                 style={{
                   background: isPlayingPreview ? "rgba(168,216,200,0.15)" : "none",
                   border: "0.5px solid rgba(168,216,200,0.35)",
-                  borderRadius: 6, color: "#a8d8c8", fontSize: "0.78rem",
+                  borderRadius: 6, color: "#a8d8c8", fontSize: "0.72rem",
                   padding: "0.2rem 0.55rem", cursor: "pointer", flexShrink: 0,
                   marginRight: "0.5rem", fontFamily: "inherit",
-                  transition: "background 0.18s",
+                  transition: "background 0.18s", letterSpacing: "0.03em",
                 }}
               >
-                {isLoadingPreview ? "···" : isPlayingPreview ? "■" : "▷"}
+                {isLoadingPreview ? "···" : isPlayingPreview ? "■ Stop" : "▷ Preview"}
               </button>
             )}
             {locked
@@ -652,6 +652,16 @@ export default function MindTranceformApp() {
   const ratingTimerRef                          = useRef(null);
   const [previewLoading, setPreviewLoading]     = useState(null);
   const [previewPlaying, setPreviewPlaying]     = useState(null);
+
+  // Background sound preview
+  const bgPreviewCtxRef   = useRef(null);
+  const bgPreviewAudioRef = useRef(null);
+  const bgPreviewTimerRef = useRef(null);
+  const [bgPreviewPlaying, setBgPreviewPlaying] = useState(null);
+  const [bgPreviewLoading, setBgPreviewLoading] = useState(null);
+
+  // Background listening instructions
+  const [bgInstructionsChecked, setBgInstructionsChecked] = useState(false);
 
   // Sessions
   const [sessions, setSessions]               = useState([]);
@@ -1030,6 +1040,80 @@ export default function MindTranceformApp() {
     setPreviewLoading(null);
   }
 
+  function stopBgPreview() {
+    clearTimeout(bgPreviewTimerRef.current);
+    if (bgPreviewAudioRef.current) {
+      bgPreviewAudioRef.current.pause();
+      bgPreviewAudioRef.current.onended = null;
+      bgPreviewAudioRef.current = null;
+    }
+    if (bgPreviewCtxRef.current) {
+      bgPreviewCtxRef.current.close().catch(() => {});
+      bgPreviewCtxRef.current = null;
+    }
+    setBgPreviewPlaying(null);
+    setBgPreviewLoading(null);
+  }
+
+  function previewBackground(bgName) {
+    if (bgPreviewPlaying === bgName) { stopBgPreview(); return; }
+    stopBgPreview();
+
+    if (bgName === "Rain" || bgName === "Ocean") {
+      const url = bgName === "Rain"
+        ? "https://bigsoundbank.com/UPLOAD/mp3/0154.mp3"
+        : "https://bigsoundbank.com/UPLOAD/mp3/0295.mp3";
+      setBgPreviewLoading(bgName);
+      const audio = new Audio(url);
+      audio.volume = 0.45;
+      bgPreviewAudioRef.current = audio;
+      audio.oncanplay = () => {
+        setBgPreviewLoading(null);
+        setBgPreviewPlaying(bgName);
+        audio.play().catch(() => {});
+        bgPreviewTimerRef.current = setTimeout(() => stopBgPreview(), 12000);
+      };
+      audio.onended = () => { setBgPreviewPlaying(null); bgPreviewAudioRef.current = null; };
+      audio.onerror = () => { setBgPreviewLoading(null); bgPreviewAudioRef.current = null; };
+      audio.load();
+    } else {
+      // Web Audio API for Hz tones and binaural beats
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      try {
+        const ctx = new AudioCtx();
+        bgPreviewCtxRef.current = ctx;
+        const gain = ctx.createGain();
+        gain.gain.value = 0.15;
+        gain.connect(ctx.destination);
+
+        if (bgName === "432 Hz" || bgName === "528 Hz") {
+          const osc = ctx.createOscillator();
+          osc.type = "sine";
+          osc.frequency.value = bgName === "432 Hz" ? 432 : 528;
+          osc.connect(gain);
+          osc.start();
+        } else if (bgName === "Theta Waves" || bgName === "Delta Sleep") {
+          const base = bgName === "Theta Waves" ? 200 : 100;
+          const beat = bgName === "Theta Waves" ? 6 : 2;
+          const merger = ctx.createChannelMerger(2);
+          merger.connect(gain);
+          [base, base + beat].forEach((freq, ch) => {
+            const osc = ctx.createOscillator();
+            osc.type = "sine";
+            osc.frequency.value = freq;
+            osc.connect(merger, 0, ch);
+            osc.start();
+          });
+        }
+        setBgPreviewPlaying(bgName);
+        bgPreviewTimerRef.current = setTimeout(() => stopBgPreview(), 10000);
+      } catch (e) {
+        console.error("Background preview error:", e);
+      }
+    }
+  }
+
   async function generate() {
     // Free session limit: null plan = free tier, 1 session lifetime
     if (!plan && sessionsUsed >= 1) {
@@ -1104,12 +1188,20 @@ export default function MindTranceformApp() {
       if (!form[s.id]) { setError("Please choose an option."); return; }
     }
     setError("");
+    stopBgPreview();
+    // Show listening instructions after background selection (once per user)
+    if (s.id === "background" && !localStorage.getItem("mt_headphones_reminder")) {
+      setBgInstructionsChecked(false);
+      setView("bgInstructions");
+      return;
+    }
     if (step < steps.length - 1) setStep((p) => p + 1);
     else generate();
   }
 
   function goBack() {
     setError("");
+    stopBgPreview();
     if (step === 0) setView("home");
     else setStep((p) => p - 1);
   }
@@ -1611,6 +1703,18 @@ export default function MindTranceformApp() {
             }
             {form.background && (
               <BackgroundPlayer background={form.background} intensity={form.backgroundIntensity} />
+            )}
+            {["432 Hz", "528 Hz", "Theta Waves", "Delta Sleep"].includes(form.background) &&
+              !localStorage.getItem("mt_headphones_reminder") && (
+              <div style={{
+                display: "flex", alignItems: "center", gap: "0.6rem",
+                background: "rgba(168,216,200,0.06)", border: "0.5px solid rgba(168,216,200,0.2)",
+                borderRadius: 10, padding: "0.7rem 1rem", marginBottom: "1rem",
+                fontSize: "0.8rem", color: "#8a879e",
+              }}>
+                <span style={{ fontSize: "1.1rem", flexShrink: 0 }}>🎧</span>
+                <span>For best results, use headphones — especially for <strong style={{ color: "#a8d8c8" }}>{form.background}</strong></span>
+              </div>
             )}
             <div style={S.scriptBox}>{result.script}</div>
             <div style={S.row}>
@@ -2453,6 +2557,98 @@ export default function MindTranceformApp() {
     </div>
   );
 
+  // ── BACKGROUND LISTENING INSTRUCTIONS ──
+  if (view === "bgInstructions") {
+    const bg = form.background;
+    const isHz = bg === "432 Hz" || bg === "528 Hz";
+    const isBinaural = bg === "Theta Waves" || bg === "Delta Sleep";
+    const tip = (icon, text) => (
+      <div style={{ display: "flex", gap: "0.6rem", marginBottom: "0.45rem", alignItems: "flex-start" }}>
+        <span style={{ color: "#a8d8c8", flexShrink: 0, marginTop: "0.05rem" }}>{icon}</span>
+        <span style={{ fontSize: "0.86rem", color: "#c8c5d8", lineHeight: 1.6 }}>{text}</span>
+      </div>
+    );
+    const sec = (title) => (
+      <div style={{ fontSize: "0.68rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#8a879e", marginBottom: "0.6rem", marginTop: "1.25rem" }}>{title}</div>
+    );
+    return (
+      <div style={S.root}>
+        <StarField />
+        <div style={S.wrap}>
+          <Logo sub brand={whiteLabel} />
+          <div style={S.card}>
+            <div style={{ fontSize: "1.45rem", fontWeight: 300, marginBottom: "0.3rem" }}>
+              How to get the most from your session
+            </div>
+            <div style={{ height: "0.5px", background: "rgba(255,255,255,0.08)", margin: "1rem 0 1.25rem" }} />
+
+            {sec("For background sounds")}
+            {tip("◦", "Use headphones for the best experience — especially for Hz frequencies and binaural beats")}
+            {tip("◦", "Set your volume to a comfortable level before starting")}
+            {tip("◦", "The background sound will play throughout your session")}
+
+            {isHz && (<>
+              {sec(`About ${bg}`)}
+              {bg === "432 Hz" && tip("◦", "432 Hz promotes relaxation and natural harmony")}
+              {bg === "528 Hz" && tip("◦", "528 Hz is associated with transformation and clarity")}
+              {tip("◦", "This is a gentle tone — it should be barely noticeable under the voice")}
+            </>)}
+
+            {isBinaural && (<>
+              {sec("About binaural beats")}
+              {bg === "Theta Waves" && tip("◦", "Theta waves (4–8 Hz) are ideal for deep meditation")}
+              {bg === "Delta Sleep" && tip("◦", "Delta waves (0.5–4 Hz) are ideal for deep sleep")}
+              {tip("◦", <span><strong style={{ color: "#e8e6f0" }}>You must use headphones</strong> — binaural beats only work when each ear hears a different frequency</span>)}
+            </>)}
+
+            {!isHz && !isBinaural && (<>
+              {sec(`About ${bg} sounds`)}
+              {bg === "Rain" && tip("◦", "Gentle rainfall creates a grounding, peaceful atmosphere for your session")}
+              {bg === "Ocean" && tip("◦", "Ocean waves help establish a slow, expansive rhythm to guide your breath")}
+            </>)}
+
+            <div style={{ height: "0.5px", background: "rgba(255,255,255,0.08)", margin: "1.5rem 0 1.25rem" }} />
+
+            {/* Optional headphones checkbox */}
+            <div
+              style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "1.5rem" }}
+              onClick={() => setBgInstructionsChecked((v) => !v)}
+            >
+              <div style={{
+                width: 20, height: 20, borderRadius: 5, flexShrink: 0, marginTop: 2,
+                border: bgInstructionsChecked ? "none" : "1.5px solid rgba(168,216,200,0.4)",
+                background: bgInstructionsChecked ? "#a8d8c8" : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 12, color: "#07091a", transition: "all 0.2s",
+              }}>
+                {bgInstructionsChecked ? "✓" : ""}
+              </div>
+              <span style={{ fontSize: "0.85rem", color: "#c8c5d8", lineHeight: 1.6 }}>
+                🎧 I understand — I will use headphones for the best experience
+              </span>
+            </div>
+
+            <div style={S.row}>
+              <button style={S.btn} onClick={() => { stopBgPreview(); setView("quiz"); }}>← Back</button>
+              <button
+                style={S.btnPrimary}
+                onClick={() => {
+                  if (bgInstructionsChecked) localStorage.setItem("mt_headphones_reminder", "1");
+                  setView("quiz");
+                  setStep((p) => p + 1);
+                }}
+              >
+                Continue →
+              </button>
+            </div>
+          </div>
+          {footer}
+        </div>
+        {modal}
+      </div>
+    );
+  }
+
   // ── QUIZ ──
   const current = steps[step];
   const pct = (step / steps.length) * 100;
@@ -2495,9 +2691,13 @@ export default function MindTranceformApp() {
               selected={form[current.id]}
               onSelect={(val) => { updateForm(current.id, val); setError(""); }}
               onLockedSelect={current.lockedAction === "payment" ? () => setView("payment") : undefined}
-              onPreview={current.id === "voice" ? previewVoice : undefined}
-              previewLoading={previewLoading}
-              previewPlaying={previewPlaying}
+              onPreview={
+                current.id === "voice" ? previewVoice :
+                current.id === "background" ? previewBackground :
+                undefined
+              }
+              previewLoading={current.id === "background" ? bgPreviewLoading : previewLoading}
+              previewPlaying={current.id === "background" ? bgPreviewPlaying : previewPlaying}
             />
           )}
           <div style={S.row}>
