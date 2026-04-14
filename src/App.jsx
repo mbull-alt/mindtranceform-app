@@ -37,8 +37,8 @@ const VOICES = [
 const BACKGROUNDS = [
   { value: "432 Hz",      icon: "♫",   label: "432 Hz",      sub: "Healing resonance" },
   { value: "528 Hz",      icon: "♪",   label: "528 Hz",      sub: "Transformation & clarity" },
-  { value: "Theta Waves", icon: "〜",  label: "Theta Waves",  sub: "Deep meditation state" },
-  { value: "Delta Sleep", icon: "Zzz", label: "Delta Sleep",  sub: "Profound sleep induction" },
+  { value: "Theta Waves", icon: "〜",  label: "Theta Waves",  sub: "Deep meditation state · Use headphones" },
+  { value: "Delta Sleep", icon: "Zzz", label: "Delta Sleep",  sub: "Profound sleep induction · Use headphones" },
   { value: "Rain",        icon: "◦",   label: "Rain",         sub: "Gentle, grounding" },
   { value: "Ocean",       icon: "≈",   label: "Ocean",        sub: "Expansive, soothing" },
 ];
@@ -384,16 +384,17 @@ function buildBackgroundNodes(ctx, type, dest) {
 
     } else if (type === "Theta Waves" || type === "Delta Sleep") {
       // Binaural beat: left/right ear receive slightly different carrier frequencies.
-      // The difference equals the desired brainwave frequency (6 Hz theta, 2 Hz delta).
-      const base = type === "Theta Waves" ? 200 : 100;
+      // Theta: 200 Hz left, 206 Hz right → 6 Hz theta beat.
+      // Delta: 200 Hz left, 202 Hz right → 2 Hz delta beat.
       const beat = type === "Theta Waves" ? 6 : 2;
-      const merger = ctx.createChannelMerger(2);
-      merger.connect(dest);
-      [base, base + beat].forEach((freq, ch) => {
+      [200, 200 + beat].forEach((freq, idx) => {
         const osc = ctx.createOscillator();
         osc.type = "sine";
         osc.frequency.value = freq;
-        osc.connect(merger, 0, ch);
+        const panner = ctx.createStereoPanner();
+        panner.pan.value = idx === 0 ? -1 : 1; // left ear, right ear
+        osc.connect(panner);
+        panner.connect(dest);
         osc.start();
         nodes.push(osc);
       });
@@ -1061,58 +1062,106 @@ export default function MindTranceformApp() {
     if (bgPreviewPlaying === bgName) { stopBgPreview(); return; }
     stopBgPreview();
 
-    if (bgName === "Rain" || bgName === "Ocean") {
-      const url = bgName === "Rain"
-        ? "https://bigsoundbank.com/UPLOAD/mp3/0154.mp3"
-        : "https://bigsoundbank.com/UPLOAD/mp3/0295.mp3";
-      setBgPreviewLoading(bgName);
-      const audio = new Audio(url);
-      audio.volume = 0.45;
-      bgPreviewAudioRef.current = audio;
-      audio.oncanplay = () => {
-        setBgPreviewLoading(null);
-        setBgPreviewPlaying(bgName);
-        audio.play().catch(() => {});
-        bgPreviewTimerRef.current = setTimeout(() => stopBgPreview(), 12000);
-      };
-      audio.onended = () => { setBgPreviewPlaying(null); bgPreviewAudioRef.current = null; };
-      audio.onerror = () => { setBgPreviewLoading(null); bgPreviewAudioRef.current = null; };
-      audio.load();
-    } else {
-      // Web Audio API for Hz tones and binaural beats
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      try {
-        const ctx = new AudioCtx();
-        bgPreviewCtxRef.current = ctx;
-        const gain = ctx.createGain();
-        gain.gain.value = 0.15;
-        gain.connect(ctx.destination);
+    // All previews use Web Audio API — no external URLs needed
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    try {
+      const ctx = new AudioCtx();
+      bgPreviewCtxRef.current = ctx;
+      const gain = ctx.createGain();
+      gain.gain.value = 0.18;
+      gain.connect(ctx.destination);
 
-        if (bgName === "432 Hz" || bgName === "528 Hz") {
+      if (bgName === "432 Hz" || bgName === "528 Hz") {
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = bgName === "432 Hz" ? 432 : 528;
+        osc.connect(gain);
+        osc.start();
+
+      } else if (bgName === "Theta Waves" || bgName === "Delta Sleep") {
+        // Theta: 200 Hz left, 206 Hz right → 6 Hz beat
+        // Delta: 200 Hz left, 202 Hz right → 2 Hz beat
+        const beat = bgName === "Theta Waves" ? 6 : 2;
+        [200, 200 + beat].forEach((freq, idx) => {
           const osc = ctx.createOscillator();
           osc.type = "sine";
-          osc.frequency.value = bgName === "432 Hz" ? 432 : 528;
-          osc.connect(gain);
+          osc.frequency.value = freq;
+          const panner = ctx.createStereoPanner();
+          panner.pan.value = idx === 0 ? -1 : 1; // left ear, right ear
+          osc.connect(panner);
+          panner.connect(gain);
           osc.start();
-        } else if (bgName === "Theta Waves" || bgName === "Delta Sleep") {
-          const base = bgName === "Theta Waves" ? 200 : 100;
-          const beat = bgName === "Theta Waves" ? 6 : 2;
-          const merger = ctx.createChannelMerger(2);
-          merger.connect(gain);
-          [base, base + beat].forEach((freq, ch) => {
-            const osc = ctx.createOscillator();
-            osc.type = "sine";
-            osc.frequency.value = freq;
-            osc.connect(merger, 0, ch);
-            osc.start();
-          });
+        });
+
+      } else if (bgName === "Ocean") {
+        // White noise → low-pass at 800 Hz → slow amplitude wave at 0.1 Hz
+        const sr = ctx.sampleRate;
+        const buf = ctx.createBuffer(2, sr * 4, sr);
+        for (let ch = 0; ch < 2; ch++) {
+          const d = buf.getChannelData(ch);
+          for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
         }
-        setBgPreviewPlaying(bgName);
-        bgPreviewTimerRef.current = setTimeout(() => stopBgPreview(), 10000);
-      } catch (e) {
-        console.error("Background preview error:", e);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        const lp = ctx.createBiquadFilter();
+        lp.type = "lowpass";
+        lp.frequency.value = 800;
+        lp.Q.value = 0.5;
+        const waveGain = ctx.createGain();
+        waveGain.gain.value = 0.55;
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        lfo.type = "sine";
+        lfo.frequency.value = 0.1; // one wave every 10 seconds
+        lfoGain.gain.value = 0.4;
+        lfo.connect(lfoGain);
+        lfoGain.connect(waveGain.gain);
+        src.connect(lp);
+        lp.connect(waveGain);
+        waveGain.connect(gain);
+        lfo.start();
+        src.start();
+
+      } else if (bgName === "Rain") {
+        // White noise → bandpass → gentle amplitude flutter at 0.3 Hz
+        const sr = ctx.sampleRate;
+        const buf = ctx.createBuffer(2, sr * 4, sr);
+        for (let ch = 0; ch < 2; ch++) {
+          const d = buf.getChannelData(ch);
+          for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        }
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        const bp = ctx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.value = 3000;
+        bp.Q.value = 0.5;
+        const waveGain = ctx.createGain();
+        waveGain.gain.value = 0.6;
+        const lfo = ctx.createOscillator();
+        const lfoGain = ctx.createGain();
+        lfo.type = "sine";
+        lfo.frequency.value = 0.3; // gentle patter rhythm
+        lfoGain.gain.value = 0.3;
+        lfo.connect(lfoGain);
+        lfoGain.connect(waveGain.gain);
+        src.connect(bp);
+        bp.connect(waveGain);
+        waveGain.connect(gain);
+        lfo.start();
+        src.start();
       }
+
+      setBgPreviewPlaying(bgName);
+      // Fade out over last 2 seconds of the 15-second preview
+      gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime + 13);
+      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 15);
+      bgPreviewTimerRef.current = setTimeout(() => stopBgPreview(), 15000);
+    } catch (e) {
+      console.error("Background preview error:", e);
     }
   }
 
