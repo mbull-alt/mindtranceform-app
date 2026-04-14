@@ -847,15 +847,15 @@ export default function MindTranceformApp() {
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user ?? null;
       setUser(u);
       setView(u ? "home" : "landing");
       if (u) {
         localStorage.setItem("mt_user_id", u.id);
         if (u.email) localStorage.setItem("mt_user_email", u.email);
-        // Only register named accounts — skip anonymous guests
-        if (u.email) {
+        // Only register on actual sign-in events — not token refreshes or session restores
+        if (u.email && event === "SIGNED_IN") {
           fetch(`${BACKEND_URL}/user/register`, {
             method: "POST",
             headers: { Authorization: `Bearer ${session.access_token}` },
