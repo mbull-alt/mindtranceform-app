@@ -649,6 +649,7 @@ export default function MindTranceformApp() {
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState(null);
   const [genStep, setGenStep] = useState(0);
+  const [audioPulse, setAudioPulse] = useState(false);
 
   // Voice preview
   const previewAudioRef                         = useRef(null);
@@ -1210,6 +1211,7 @@ export default function MindTranceformApp() {
         setSessionsUsed(newUsed);
         const audioUrl = data.audioBase64 ? `data:audio/mpeg;base64,${data.audioBase64}` : null;
         setResult({ script: data.script, audioUrl, audioUnavailable: data.audioUnavailable || !data.audioBase64 });
+        if (audioUrl) setAudioPulse(true);
         setView("result");
         // Show install prompt after first session
         if (newUsed === 1) setShowInstallBanner(true);
@@ -1727,6 +1729,13 @@ export default function MindTranceformApp() {
     const tags = [form.program, form.voice, form.background].filter(Boolean);
     return (
       <div style={S.root}>
+        <style>{`
+          @keyframes audioGlow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(168,216,200,0); }
+            50% { box-shadow: 0 0 14px 5px rgba(168,216,200,0.35); }
+          }
+          .audio-pulse { animation: audioGlow 1.2s ease-in-out 3; border-radius: 12px; }
+        `}</style>
         <StarField />
         <div style={S.wrap}>
           <Logo brand={whiteLabel} />
@@ -1738,9 +1747,32 @@ export default function MindTranceformApp() {
               Personalized {form.program} · {form.voice}
             </div>
             <div style={S.tagRow}>{tags.map((t) => <div key={t} style={S.tag}>{t}</div>)}</div>
+            {result.audioUrl && (
+              <div style={{
+                background: "rgba(168,216,200,0.06)",
+                border: "0.5px solid rgba(168,216,200,0.3)",
+                borderRadius: 12,
+                padding: "1rem 1.25rem",
+                marginBottom: "1.25rem",
+                textAlign: "center",
+                boxShadow: "0 0 24px rgba(168,216,200,0.07)",
+              }}>
+                <div style={{ fontSize: "0.92rem", color: "#a8d8c8", marginBottom: "0.35rem", letterSpacing: "0.02em" }}>
+                  Press the play button below to begin your session.
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#8a879e", lineHeight: 1.65 }}>
+                  For the best experience, use headphones and find a quiet, comfortable place to relax.
+                </div>
+              </div>
+            )}
             {result.audioUrl
-              ? <><audio controls style={S.audio} src={result.audioUrl}
+              ? <><audio
+                  controls
+                  style={S.audio}
+                  src={result.audioUrl}
+                  className={audioPulse ? "audio-pulse" : undefined}
                   onPlay={() => {
+                    setAudioPulse(false);
                     if (ratedSessionId === result.audioUrl) return; // already shown for this session
                     clearTimeout(ratingTimerRef.current);
                     ratingTimerRef.current = setTimeout(() => {
