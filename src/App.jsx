@@ -722,6 +722,20 @@ export default function MindTranceformApp() {
   const [deferredInstall, setDeferredInstall] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
 
+  // Blog
+  const [blogPosts, setBlogPosts]         = useState([]);
+  const [blogPost, setBlogPost]           = useState(null);
+  const [blogLoading, setBlogLoading]     = useState(false);
+
+  // Content calendar (admin)
+  const [contentItems, setContentItems]   = useState([]);
+  const [contentFilter, setContentFilter] = useState({ type: "", status: "draft" });
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentAdminKey, setContentAdminKey] = useState(() => localStorage.getItem("mt_admin_key") || "");
+  const [adminKeyPrompt, setAdminKeyPrompt]   = useState("");
+  const [blogAdminPosts, setBlogAdminPosts]   = useState([]);
+  const [contentCopied, setContentCopied]    = useState(null);
+
   // Dynamic steps based on plan
   const steps = buildSteps(plan);
 
@@ -807,8 +821,19 @@ export default function MindTranceformApp() {
       setView("whitelabel");
     } else if (path === "/admin") {
       setView("wladmin");
+    } else if (path === "/admin/content") {
+      setView("adminContent");
+      setAuthReady(true);
     } else if (path === "/corporate") {
       setView("corporate");
+    } else if (path === "/blog" || path === "/blog/") {
+      setView("blog");
+      setAuthReady(true);
+    } else if (path.startsWith("/blog/")) {
+      const slug = path.replace("/blog/", "").replace(/\/$/, "");
+      setBlogPost({ slug, loading: true });
+      setView("blogPost");
+      setAuthReady(true);
     }
 
     // Handle Stripe success redirect
@@ -1329,6 +1354,74 @@ export default function MindTranceformApp() {
       const data = await res.json();
       if (data.success && data.testimonials.length > 0) setTestimonials(data.testimonials);
     } catch {}
+  }
+
+  async function fetchBlogPosts() {
+    setBlogLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/blog/posts`);
+      const data = await res.json();
+      if (data.success) setBlogPosts(data.posts || []);
+    } catch {}
+    setBlogLoading(false);
+  }
+
+  async function fetchBlogPost(slug) {
+    setBlogLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/blog/posts/${encodeURIComponent(slug)}`);
+      const data = await res.json();
+      if (data.success) setBlogPost(data.post);
+    } catch {}
+    setBlogLoading(false);
+  }
+
+  async function fetchContentItems() {
+    const key = contentAdminKey || localStorage.getItem("mt_admin_key");
+    if (!key) return;
+    setContentLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: "150" });
+      if (contentFilter.type)   params.set("type", contentFilter.type);
+      if (contentFilter.status) params.set("status", contentFilter.status);
+      const res = await fetch(`${BACKEND_URL}/admin/content?${params}`, {
+        headers: { "x-admin-key": key },
+      });
+      const data = await res.json();
+      if (data.success) setContentItems(data.items || []);
+    } catch {}
+    setContentLoading(false);
+  }
+
+  async function fetchBlogAdminPosts() {
+    const key = contentAdminKey || localStorage.getItem("mt_admin_key");
+    if (!key) return;
+    try {
+      const res = await fetch(`${BACKEND_URL}/admin/blog`, { headers: { "x-admin-key": key } });
+      const data = await res.json();
+      if (data.success) setBlogAdminPosts(data.posts || []);
+    } catch {}
+  }
+
+  async function updateContentStatus(id, status) {
+    const key = contentAdminKey || localStorage.getItem("mt_admin_key");
+    if (!key) return;
+    await fetch(`${BACKEND_URL}/admin/content/${id}/status`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-admin-key": key },
+      body: JSON.stringify({ status }),
+    });
+    setContentItems(prev => prev.map(item => item.id === id ? { ...item, status } : item));
+  }
+
+  async function publishBlogPost(id) {
+    const key = contentAdminKey || localStorage.getItem("mt_admin_key");
+    if (!key) return;
+    await fetch(`${BACKEND_URL}/admin/blog/${id}/publish`, {
+      method: "PUT",
+      headers: { "x-admin-key": key },
+    });
+    setBlogAdminPosts(prev => prev.map(p => p.id === id ? { ...p, status: "published" } : p));
   }
 
   async function submitRating() {
@@ -2728,6 +2821,209 @@ export default function MindTranceformApp() {
           {footer}
         </div>
         {modal}
+      </div>
+    );
+  }
+
+  // ── BLOG LIST ──
+  if (view === "blog") {
+    if (!blogPosts.length && !blogLoading) fetchBlogPosts();
+    const fmt = (d) => d ? new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "";
+    return (
+      <div style={S.root}>
+        <StarField />
+        <div style={{ ...S.wrap, maxWidth: 680 }}>
+          <div style={{ textAlign: "center", padding: "2.5rem 0 1.5rem" }}>
+            <h1 style={{ ...S.h1, fontSize: "1.8rem" }}>Mind <span style={S.h1span}>Tranceform</span> Blog</h1>
+            <p style={{ fontSize: "0.82rem", color: "#8a879e", letterSpacing: "0.15em", textTransform: "uppercase", marginTop: "0.4rem" }}>Sleep · Meditation · Hypnosis · Wellness</p>
+          </div>
+          {blogLoading && <div style={{ textAlign: "center", color: "#8a879e", padding: "2rem" }}>Loading posts...</div>}
+          {!blogLoading && !blogPosts.length && (
+            <div style={{ textAlign: "center", color: "#8a879e", padding: "2rem" }}>No posts published yet.</div>
+          )}
+          {blogPosts.map(post => (
+            <div key={post.id} style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.09)", borderRadius: 14, padding: "1.5rem", marginBottom: "1rem", cursor: "pointer" }}
+              onClick={() => {
+                window.history.pushState({}, "", `/blog/${post.slug}`);
+                setBlogPost(post);
+                setView("blogPost");
+              }}>
+              <div style={{ fontSize: "0.68rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "#a8d8c8", marginBottom: "0.5rem" }}>{post.topic} · {fmt(post.published_at)}</div>
+              <div style={{ fontSize: "1.15rem", fontWeight: 300, color: "#e8e6f0", marginBottom: "0.6rem", lineHeight: 1.4 }}>{post.title}</div>
+              <div style={{ fontSize: "0.84rem", color: "#8a879e", lineHeight: 1.7 }}>{(post.excerpt || "").slice(0, 180)}{post.excerpt?.length > 180 ? "…" : ""}</div>
+              <div style={{ marginTop: "0.85rem", fontSize: "0.78rem", color: "#a8d8c8" }}>Read more →</div>
+            </div>
+          ))}
+          <div style={{ textAlign: "center", padding: "1.5rem 0 2rem" }}>
+            <button style={{ ...S.btn, fontSize: "0.82rem" }} onClick={() => { window.history.pushState({}, "", "/"); setView(user ? "home" : "landing"); }}>← Back to App</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── BLOG POST ──
+  if (view === "blogPost") {
+    const post = blogPost;
+    if (post?.slug && (post.loading || !post.content) && !blogLoading) fetchBlogPost(post.slug);
+    const fmt = (d) => d ? new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "";
+
+    function renderBlogContent(md) {
+      if (!md) return null;
+      return md.split("\n").map((line, i) => {
+        if (line.startsWith("## ")) return <h2 key={i} style={{ fontSize: "1.15rem", fontWeight: 400, color: "#e8e6f0", margin: "1.5rem 0 0.6rem", letterSpacing: "0.02em" }}>{line.replace("## ", "")}</h2>;
+        if (line.startsWith("# "))  return null;
+        if (!line.trim()) return <div key={i} style={{ height: "0.75rem" }} />;
+        return <p key={i} style={{ fontSize: "0.9rem", color: "#c8c5d8", lineHeight: 1.8, margin: "0 0 0.5rem" }}>{line}</p>;
+      });
+    }
+
+    return (
+      <div style={S.root}>
+        <StarField />
+        <div style={{ ...S.wrap, maxWidth: 680 }}>
+          <div style={{ padding: "2rem 0 1rem" }}>
+            <button style={{ background: "none", border: "none", color: "#8a879e", cursor: "pointer", fontFamily: "inherit", fontSize: "0.82rem", padding: 0, marginBottom: "1.5rem" }}
+              onClick={() => { window.history.pushState({}, "", "/blog"); setBlogPost(null); setView("blog"); }}>← All posts</button>
+            {blogLoading && <div style={{ color: "#8a879e", padding: "2rem 0" }}>Loading...</div>}
+            {!blogLoading && post && !post.loading && (
+              <div style={{ ...S.card }}>
+                <div style={{ fontSize: "0.68rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "#a8d8c8", marginBottom: "0.6rem" }}>{post.topic} · {fmt(post.published_at)}</div>
+                <h1 style={{ fontSize: "1.5rem", fontWeight: 300, color: "#e8e6f0", marginBottom: "1.25rem", lineHeight: 1.35 }}>{post.title}</h1>
+                <div style={{ height: "0.5px", background: "rgba(255,255,255,0.08)", marginBottom: "1.25rem" }} />
+                <div>{renderBlogContent(post.content)}</div>
+                <div style={{ height: "0.5px", background: "rgba(255,255,255,0.08)", margin: "1.5rem 0 1.25rem" }} />
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "0.85rem", color: "#8a879e", marginBottom: "0.75rem" }}>Experience personalized meditation for yourself</div>
+                  <button style={S.btnPrimary} onClick={() => { window.history.pushState({}, "", "/"); setView(user ? "home" : "landing"); }}>Try Mind Tranceform Free ✦</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── ADMIN CONTENT CALENDAR ──
+  if (view === "adminContent") {
+    const key = contentAdminKey;
+    const TYPES   = ["", "tiktok", "twitter", "reddit", "email", "reddit_reply", "twitter_reply"];
+    const STATUSES = ["", "draft", "approved", "posted"];
+    const TYPE_LABELS = { tiktok: "TikTok", twitter: "Twitter", reddit: "Reddit Post", email: "Email Subjects", reddit_reply: "Reddit Reply", twitter_reply: "Twitter Reply", "": "All Types" };
+    const statusColor = { draft: "#8a879e", approved: "#a8d8c8", posted: "#c9a8d8" };
+
+    const fmt = (d) => d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
+
+    if (!key) {
+      return (
+        <div style={S.root}>
+          <StarField />
+          <div style={S.wrap}>
+            <div style={S.card}>
+              <div style={{ fontSize: "1.2rem", fontWeight: 300, marginBottom: "1rem" }}>Admin Content Calendar</div>
+              <input style={S.input} type="password" placeholder="Enter admin key" value={adminKeyPrompt}
+                onChange={e => setAdminKeyPrompt(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && adminKeyPrompt) { localStorage.setItem("mt_admin_key", adminKeyPrompt); setContentAdminKey(adminKeyPrompt); }}} />
+              <button style={{ ...S.btnPrimary, width: "100%", marginTop: "0.75rem" }}
+                onClick={() => { if (adminKeyPrompt) { localStorage.setItem("mt_admin_key", adminKeyPrompt); setContentAdminKey(adminKeyPrompt); }}}>
+                Unlock
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (!contentItems.length && !contentLoading) { fetchContentItems(); fetchBlogAdminPosts(); }
+
+    return (
+      <div style={S.root}>
+        <StarField />
+        <div style={{ ...S.wrap, maxWidth: 820 }}>
+          <div style={{ padding: "1.5rem 0 0.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.75rem" }}>
+            <div>
+              <div style={{ fontSize: "1.3rem", fontWeight: 300, color: "#e8e6f0" }}>Content Calendar</div>
+              <div style={{ fontSize: "0.72rem", color: "#8a879e", letterSpacing: "0.15em", textTransform: "uppercase", marginTop: "0.2rem" }}>{contentItems.length} items</div>
+            </div>
+            <button style={{ ...S.btnPrimary, fontSize: "0.78rem", padding: "0.45rem 1rem" }} onClick={fetchContentItems}>↻ Refresh</button>
+          </div>
+
+          {/* Filters */}
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
+            {TYPES.map(t => (
+              <button key={t} onClick={() => { setContentFilter(f => ({ ...f, type: t })); }}
+                style={{ background: contentFilter.type === t ? "rgba(168,216,200,0.15)" : "rgba(255,255,255,0.04)", border: `0.5px solid ${contentFilter.type === t ? "#a8d8c8" : "rgba(255,255,255,0.1)"}`, borderRadius: 8, color: contentFilter.type === t ? "#a8d8c8" : "#8a879e", fontSize: "0.72rem", padding: "0.3rem 0.7rem", cursor: "pointer", fontFamily: "inherit" }}>
+                {TYPE_LABELS[t] || t || "All Types"}
+              </button>
+            ))}
+            {STATUSES.filter(Boolean).map(s => (
+              <button key={s} onClick={() => setContentFilter(f => ({ ...f, status: f.status === s ? "" : s }))}
+                style={{ background: contentFilter.status === s ? "rgba(168,216,200,0.1)" : "transparent", border: `0.5px solid ${statusColor[s] || "rgba(255,255,255,0.1)"}`, borderRadius: 8, color: statusColor[s] || "#8a879e", fontSize: "0.72rem", padding: "0.3rem 0.7rem", cursor: "pointer", fontFamily: "inherit" }}>
+                {s}
+              </button>
+            ))}
+          </div>
+
+          {contentLoading && <div style={{ color: "#8a879e", padding: "1rem 0" }}>Loading...</div>}
+
+          {contentItems.filter(item => (!contentFilter.type || item.type === contentFilter.type) && (!contentFilter.status || item.status === contentFilter.status)).map(item => (
+            <div key={item.id} style={{ background: "rgba(255,255,255,0.03)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "1rem", marginBottom: "0.65rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.6rem", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <span style={{ fontSize: "0.65rem", letterSpacing: "0.14em", textTransform: "uppercase", color: "#a8d8c8", background: "rgba(168,216,200,0.08)", borderRadius: 5, padding: "0.15rem 0.45rem" }}>{item.type}</span>
+                  {item.topic && <span style={{ fontSize: "0.65rem", color: "#8a879e" }}>{item.topic}</span>}
+                  <span style={{ fontSize: "0.65rem", color: statusColor[item.status] || "#8a879e" }}>● {item.status}</span>
+                </div>
+                <span style={{ fontSize: "0.68rem", color: "#8a879e" }}>{fmt(item.generated_at)}</span>
+              </div>
+              <div style={{ fontSize: "0.83rem", color: "#c8c5d8", lineHeight: 1.65, whiteSpace: "pre-wrap", maxHeight: 160, overflow: "hidden", WebkitMaskImage: "linear-gradient(to bottom, black 70%, transparent 100%)" }}>
+                {item.content}
+              </div>
+              {item.metadata?.post_url && <div style={{ fontSize: "0.72rem", color: "#8a879e", marginTop: "0.5rem" }}>Source: <a href={item.metadata.post_url} target="_blank" rel="noopener noreferrer" style={{ color: "#a8d8c8" }}>{item.metadata.post_url}</a></div>}
+              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+                <button onClick={() => { navigator.clipboard.writeText(item.content); setContentCopied(item.id); setTimeout(() => setContentCopied(null), 2000); }}
+                  style={{ background: contentCopied === item.id ? "rgba(168,216,200,0.15)" : "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.12)", borderRadius: 7, color: "#a8d8c8", fontSize: "0.72rem", padding: "0.3rem 0.75rem", cursor: "pointer", fontFamily: "inherit" }}>
+                  {contentCopied === item.id ? "Copied!" : "Copy"}
+                </button>
+                {item.status === "draft" && <button onClick={() => updateContentStatus(item.id, "approved")}
+                  style={{ background: "rgba(168,216,200,0.08)", border: "0.5px solid rgba(168,216,200,0.3)", borderRadius: 7, color: "#a8d8c8", fontSize: "0.72rem", padding: "0.3rem 0.75rem", cursor: "pointer", fontFamily: "inherit" }}>
+                  Approve
+                </button>}
+                {item.status === "approved" && <button onClick={() => updateContentStatus(item.id, "posted")}
+                  style={{ background: "rgba(201,168,216,0.08)", border: "0.5px solid rgba(201,168,216,0.3)", borderRadius: 7, color: "#c9a8d8", fontSize: "0.72rem", padding: "0.3rem 0.75rem", cursor: "pointer", fontFamily: "inherit" }}>
+                  Mark Posted
+                </button>}
+              </div>
+            </div>
+          ))}
+
+          {/* Blog posts section */}
+          {blogAdminPosts.length > 0 && (
+            <div style={{ marginTop: "2rem" }}>
+              <div style={{ fontSize: "1rem", fontWeight: 300, color: "#e8e6f0", marginBottom: "0.75rem" }}>Blog Posts</div>
+              {blogAdminPosts.map(post => (
+                <div key={post.id} style={{ background: "rgba(255,255,255,0.03)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "1rem", marginBottom: "0.65rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: "0.88rem", color: "#e8e6f0", marginBottom: "0.2rem" }}>{post.title}</div>
+                    <div style={{ fontSize: "0.7rem", color: "#8a879e" }}>{post.topic} · {post.status} · {fmt(post.created_at)}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    {post.status === "draft" && <button onClick={() => publishBlogPost(post.id)}
+                      style={{ background: "rgba(168,216,200,0.08)", border: "0.5px solid rgba(168,216,200,0.3)", borderRadius: 7, color: "#a8d8c8", fontSize: "0.72rem", padding: "0.3rem 0.75rem", cursor: "pointer", fontFamily: "inherit" }}>
+                      Publish
+                    </button>}
+                    {post.status === "published" && <span style={{ fontSize: "0.7rem", color: "#a8d8c8" }}>● Live at /blog/{post.slug}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ textAlign: "center", padding: "1.5rem 0 2rem" }}>
+            <button style={{ ...S.btn, fontSize: "0.8rem" }} onClick={() => { window.history.pushState({}, "", "/"); setView(user ? "home" : "landing"); }}>← Back to App</button>
+          </div>
+        </div>
       </div>
     );
   }
