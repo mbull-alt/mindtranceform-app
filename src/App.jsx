@@ -1390,18 +1390,17 @@ export default function MindTranceformApp() {
   }
 
   async function fetchContentItems() {
-    const key = contentAdminKey || localStorage.getItem("mt_admin_key");
-    if (!key) return;
     setContentLoading(true);
     setContentError("");
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
     try {
+      const token = await getToken();
       const params = new URLSearchParams({ limit: "150" });
       if (contentFilter.type)   params.set("type", contentFilter.type);
       if (contentFilter.status) params.set("status", contentFilter.status);
       const res = await fetch(`${BACKEND_URL}/admin/content?${params}`, {
-        headers: { "x-admin-key": key },
+        headers: { "Authorization": `Bearer ${token}` },
         signal: controller.signal,
       });
       const data = await res.json();
@@ -1421,32 +1420,31 @@ export default function MindTranceformApp() {
   }
 
   async function fetchBlogAdminPosts() {
-    const key = contentAdminKey || localStorage.getItem("mt_admin_key");
-    if (!key) return;
     try {
-      const res = await fetch(`${BACKEND_URL}/admin/blog`, { headers: { "x-admin-key": key } });
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/admin/blog`, {
+        headers: { "Authorization": `Bearer ${token}` },
+      });
       const data = await res.json();
       if (data.success) setBlogAdminPosts(data.posts || []);
     } catch {}
   }
 
   async function updateContentStatus(id, status) {
-    const key = contentAdminKey || localStorage.getItem("mt_admin_key");
-    if (!key) return;
+    const token = await getToken();
     await fetch(`${BACKEND_URL}/admin/content/${id}/status`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json", "x-admin-key": key },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ status }),
     });
     setContentItems(prev => prev.map(item => item.id === id ? { ...item, status } : item));
   }
 
   async function publishBlogPost(id) {
-    const key = contentAdminKey || localStorage.getItem("mt_admin_key");
-    if (!key) return;
+    const token = await getToken();
     await fetch(`${BACKEND_URL}/admin/blog/${id}/publish`, {
       method: "PUT",
-      headers: { "x-admin-key": key },
+      headers: { "Authorization": `Bearer ${token}` },
     });
     setBlogAdminPosts(prev => prev.map(p => p.id === id ? { ...p, status: "published" } : p));
   }
@@ -2939,7 +2937,6 @@ export default function MindTranceformApp() {
 
   // ── ADMIN CONTENT CALENDAR ──
   if (view === "adminContent") {
-    const key = contentAdminKey;
     const TYPES   = ["", "tiktok", "twitter", "reddit", "email", "reddit_reply", "twitter_reply"];
     const STATUSES = ["", "draft", "approved", "posted"];
     const TYPE_LABELS = { tiktok: "TikTok", twitter: "Twitter", reddit: "Reddit Post", email: "Email Subjects", reddit_reply: "Reddit Reply", twitter_reply: "Twitter Reply", "": "All Types" };
@@ -2947,27 +2944,7 @@ export default function MindTranceformApp() {
 
     const fmt = (d) => d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—";
 
-    if (!key) {
-      return (
-        <div style={S.root}>
-          <StarField />
-          <div style={S.wrap}>
-            <div style={S.card}>
-              <div style={{ fontSize: "1.2rem", fontWeight: 300, marginBottom: "1rem" }}>Admin Content Calendar</div>
-              <input style={S.input} type="password" placeholder="Enter admin key" value={adminKeyPrompt}
-                onChange={e => setAdminKeyPrompt(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && adminKeyPrompt) { localStorage.setItem("mt_admin_key", adminKeyPrompt); setContentAdminKey(adminKeyPrompt); }}} />
-              <button style={{ ...S.btnPrimary, width: "100%", marginTop: "0.75rem" }}
-                onClick={() => { if (adminKeyPrompt) { localStorage.setItem("mt_admin_key", adminKeyPrompt); setContentAdminKey(adminKeyPrompt); }}}>
-                Unlock
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (!contentItems.length && !contentLoading) { fetchContentItems(); fetchBlogAdminPosts(); }
+    if (!contentItems.length && !contentLoading && !contentError) { fetchContentItems(); fetchBlogAdminPosts(); }
 
     return (
       <div style={S.root}>
