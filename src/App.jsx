@@ -731,6 +731,7 @@ export default function MindTranceformApp() {
   const [contentItems, setContentItems]   = useState([]);
   const [contentFilter, setContentFilter] = useState({ type: "", status: "draft" });
   const [contentLoading, setContentLoading] = useState(false);
+  const [contentError, setContentError]   = useState("");
   const [contentAdminKey, setContentAdminKey] = useState(() => localStorage.getItem("mt_admin_key") || "");
   const [adminKeyPrompt, setAdminKeyPrompt]   = useState("");
   const [blogAdminPosts, setBlogAdminPosts]   = useState([]);
@@ -1392,17 +1393,31 @@ export default function MindTranceformApp() {
     const key = contentAdminKey || localStorage.getItem("mt_admin_key");
     if (!key) return;
     setContentLoading(true);
+    setContentError("");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
     try {
       const params = new URLSearchParams({ limit: "150" });
       if (contentFilter.type)   params.set("type", contentFilter.type);
       if (contentFilter.status) params.set("status", contentFilter.status);
       const res = await fetch(`${BACKEND_URL}/admin/content?${params}`, {
         headers: { "x-admin-key": key },
+        signal: controller.signal,
       });
       const data = await res.json();
-      if (data.success) setContentItems(data.items || []);
-    } catch {}
-    setContentLoading(false);
+      if (data.success) {
+        setContentItems(data.items || []);
+      } else {
+        console.error("[admin/content] fetch error response:", data);
+        setContentError(data.error || `HTTP ${res.status}`);
+      }
+    } catch (err) {
+      console.error("[admin/content] fetch exception:", err.message);
+      setContentError(err.name === "AbortError" ? "Request timed out — backend may be down" : err.message);
+    } finally {
+      clearTimeout(timer);
+      setContentLoading(false);
+    }
   }
 
   async function fetchBlogAdminPosts() {
@@ -2983,6 +2998,11 @@ export default function MindTranceformApp() {
           </div>
 
           {contentLoading && <div style={{ color: "#8a879e", padding: "1rem 0" }}>Loading...</div>}
+          {!contentLoading && contentError && (
+            <div style={{ color: "#e8a8a8", background: "rgba(232,168,168,0.07)", border: "0.5px solid rgba(232,168,168,0.2)", borderRadius: 10, padding: "0.85rem 1rem", fontSize: "0.82rem", marginBottom: "1rem" }}>
+              Error: {contentError}
+            </div>
+          )}
 
           {contentItems.filter(item => (!contentFilter.type || item.type === contentFilter.type) && (!contentFilter.status || item.status === contentFilter.status)).map(item => (
             <div key={item.id} style={{ background: "rgba(255,255,255,0.03)", border: "0.5px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "1rem", marginBottom: "0.65rem" }}>
@@ -2992,7 +3012,7 @@ export default function MindTranceformApp() {
                   {item.topic && <span style={{ fontSize: "0.65rem", color: "#8a879e" }}>{item.topic}</span>}
                   <span style={{ fontSize: "0.65rem", color: statusColor[item.status] || "#8a879e" }}>● {item.status}</span>
                 </div>
-                <span style={{ fontSize: "0.68rem", color: "#8a879e" }}>{fmt(item.generated_at)}</span>
+                <span style={{ fontSize: "0.68rem", color: "#8a879e" }}>{fmt(item.generated_at || item.created_at)}</span>
               </div>
               <div style={{ fontSize: "0.83rem", color: "#c8c5d8", lineHeight: 1.65, whiteSpace: "pre-wrap", maxHeight: 160, overflow: "hidden", WebkitMaskImage: "linear-gradient(to bottom, black 70%, transparent 100%)" }}>
                 {item.content}
