@@ -857,8 +857,14 @@ export default function MindTranceformApp() {
         setSafetyReturn("home");
         setView("safety");
       } else {
-        const isRootPath = window.location.pathname === "/" || window.location.pathname === "";
-        setView(session?.user ? "home" : (isRootPath ? "landing" : "auth"));
+        const currentPath = window.location.pathname;
+        const isRootPath = currentPath === "/" || currentPath === "";
+        const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+        if (currentPath === "/admin/content") {
+          setView(session?.user?.email === adminEmail ? "adminContent" : (session?.user ? "home" : "landing"));
+        } else {
+          setView(session?.user ? "home" : (isRootPath ? "landing" : "auth"));
+        }
       }
       setAuthReady(true);
       if (isPaymentSuccess && session?.user) {
@@ -877,7 +883,13 @@ export default function MindTranceformApp() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      setView(u ? "home" : "landing");
+      const currentPath = window.location.pathname;
+      const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+      if (currentPath === "/admin/content" && u?.email === adminEmail) {
+        setView("adminContent");
+      } else {
+        setView(u ? "home" : "landing");
+      }
       if (u) {
         localStorage.setItem("mt_user_id", u.id);
         if (u.email) localStorage.setItem("mt_user_email", u.email);
@@ -2701,6 +2713,11 @@ export default function MindTranceformApp() {
           <button style={{ ...S.btn, width: "100%", padding: "1rem", marginBottom: "0.75rem" }} onClick={() => { setView("sessions"); fetchSessions(); }}>
             My Sessions
           </button>
+          {user?.email === import.meta.env.VITE_ADMIN_EMAIL && (
+            <button style={{ ...S.btn, width: "100%", padding: "1rem", marginBottom: "0.75rem" }} onClick={() => { window.history.pushState({}, "", "/admin/content"); setView("adminContent"); }}>
+              Admin Dashboard
+            </button>
+          )}
           <button style={{ ...S.btn, width: "100%", padding: "1rem" }} onClick={() => { setView("account"); fetchSubStatus(); fetchReferralStats(); setCancelConfirm(false); }}>
             Account
           </button>
