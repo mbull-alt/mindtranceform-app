@@ -8,8 +8,8 @@ const supabase = createClient(
 );
 
 // ─── DATA ────────────────────────────────────────────────────────────────────
-function getProgramOptions(plan) {
-  const isPaid = plan === "premium" || plan === "pro";
+function getProgramOptions(plan, isAdmin) {
+  const isPaid = isAdmin || plan === "premium" || plan === "pro";
   return [
     { value: "Sleep",                icon: "🌙", label: "Sleep",                sub: "Deep rest & nighttime calm" },
     { value: "Stress & Anxiety",     icon: "🌊", label: "Stress & Anxiety",     sub: "Quiet the mind, steady the body" },
@@ -43,8 +43,8 @@ const BACKGROUNDS = [
   { value: "Ocean",       icon: "≈",   label: "Ocean",        sub: "Expansive, soothing" },
 ];
 
-function getLengthOptions(plan) {
-  const rank = { null: 0, undefined: 0, single: 1, premium: 2, pro: 3 }[plan] ?? 0;
+function getLengthOptions(plan, isAdmin) {
+  const rank = isAdmin ? 3 : ({ null: 0, undefined: 0, single: 1, premium: 2, pro: 3 }[plan] ?? 0);
   return [
     { value: "5",  icon: "◦", label: "5 minutes",  sub: "Quick reset",          locked: false },
     { value: "10", icon: "◎", label: "10 minutes", sub: "Full session",          locked: rank < 2 },
@@ -54,8 +54,8 @@ function getLengthOptions(plan) {
   ];
 }
 
-function getStyleOptions(plan) {
-  const isFree = !plan;
+function getStyleOptions(plan, isAdmin) {
+  const isFree = !isAdmin && !plan;
   return [
     { value: "Gentle Meditation", icon: "◌",   label: "Gentle Meditation", sub: "Soft, calming guidance",         locked: false },
     { value: "Deep Hypnosis",     icon: "●",   label: "Deep Hypnosis",     sub: "Profound trance induction",      locked: false },
@@ -79,15 +79,15 @@ const EMPTY_FORM = {
   affirmationStyle: "", backgroundIntensity: "",
 };
 
-function buildSteps(plan) {
+function buildSteps(plan, isAdmin) {
   const steps = [
     { id: "name",       question: "What is your name?",                        type: "input",   placeholder: "Your first name..." },
     { id: "goal",       question: "What do you want to let go of or achieve?", type: "input",   placeholder: "e.g. Release anxiety and sleep deeply..." },
-    { id: "program",    question: "Choose your program",                        type: "options", options: getProgramOptions(plan), lockedAction: "payment" },
+    { id: "program",    question: "Choose your program",                        type: "options", options: getProgramOptions(plan, isAdmin), lockedAction: isAdmin ? undefined : "payment" },
     { id: "voice",      question: "Choose your voice",                          type: "options", options: VOICES },
     { id: "background", question: "Choose your background sound",               type: "options", options: BACKGROUNDS },
-    { id: "length",     question: "How long would you like your session?",      type: "options", options: getLengthOptions(plan) },
-    { id: "style",      question: "Choose your session style",                  type: "options", options: getStyleOptions(plan) },
+    { id: "length",     question: "How long would you like your session?",      type: "options", options: getLengthOptions(plan, isAdmin) },
+    { id: "style",      question: "Choose your session style",                  type: "options", options: getStyleOptions(plan, isAdmin) },
     { id: "personalization", question: "How deeply personalized should your session be?", type: "personalization", options: [
       { value: "standard", icon: "◎", label: "Standard",     sub: "Personalized to your name and goal" },
       { value: "deep",     icon: "●", label: "Deep Personal", sub: "Tailored to your inner world" },
@@ -737,8 +737,11 @@ export default function MindTranceformApp() {
   const [blogAdminPosts, setBlogAdminPosts]   = useState([]);
   const [contentCopied, setContentCopied]    = useState(null);
 
-  // Dynamic steps based on plan
-  const steps = buildSteps(plan);
+  // Admin flag — owner account always gets full pro access
+  const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
+
+  // Dynamic steps based on plan (admin sees everything unlocked)
+  const steps = buildSteps(plan, isAdmin);
 
   // Capture PWA install prompt
   useEffect(() => {
@@ -853,6 +856,8 @@ export default function MindTranceformApp() {
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
+      // Sync plan from backend (admin forced to pro, others fetched from Supabase)
+      if (session?.user) fetchAndSetPlan(session.access_token, session.user.email);
       // After payment, show safety screen if not yet accepted
       if (isPaymentSuccess && session?.user && !localStorage.getItem("mt_safety_accepted")) {
         setSafetyReturn("home");
@@ -894,12 +899,13 @@ export default function MindTranceformApp() {
       if (u) {
         localStorage.setItem("mt_user_id", u.id);
         if (u.email) localStorage.setItem("mt_user_email", u.email);
-        // Only register on actual sign-in events — not token refreshes or session restores
+        // Only register / sync plan on actual sign-in — not token refreshes
         if (u.email && event === "SIGNED_IN") {
           fetch(`${BACKEND_URL}/user/register`, {
             method: "POST",
             headers: { Authorization: `Bearer ${session.access_token}` },
           }).catch(() => {});
+          fetchAndSetPlan(session.access_token, u.email);
         }
       } else {
         localStorage.removeItem("mt_user_id");
@@ -912,6 +918,28 @@ export default function MindTranceformApp() {
   async function getToken() {
     const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token;
+  }
+
+  // Fetch the user's plan from the backend and sync to state + localStorage.
+  // Admin email always gets "pro" without a backend call.
+  async function fetchAndSetPlan(token, userEmail) {
+    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+    if (userEmail === adminEmail) {
+      localStorage.setItem("mt_plan", "pro");
+      setPlan("pro");
+      return;
+    }
+    try {
+      const res = await fetch(`${BACKEND_URL}/auth/verify`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.plan) {
+        localStorage.setItem("mt_plan", data.plan);
+        setPlan(data.plan);
+      }
+    } catch {}
   }
 
   async function handleAuth(e) {
@@ -1205,8 +1233,10 @@ export default function MindTranceformApp() {
   }
 
   async function generate() {
+    // Admin always has unlimited access — skip all payment checks
+    const adminUser = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
     // Free session limit: null plan = free tier, 1 session lifetime
-    if (!plan && sessionsUsed >= 1) {
+    if (!adminUser && !plan && sessionsUsed >= 1) {
       setView("payment");
       return;
     }
