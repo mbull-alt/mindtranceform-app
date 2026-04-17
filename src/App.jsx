@@ -1173,8 +1173,10 @@ export default function MindTranceformApp() {
     setSessionsLoading(true);
     try {
       const token = await getToken();
+      console.log("Loading sessions for:", user?.email);
       const res = await fetch(`${BACKEND_URL}/sessions`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
+      console.log("Sessions response:", data);
       if (!data.success) console.error("[sessions] Fetch error:", data.error);
       setSessions(data.sessions || []);
     } catch (e) {
@@ -1351,8 +1353,13 @@ export default function MindTranceformApp() {
         const newUsed = sessionsUsed + 1;
         localStorage.setItem("mt_sessions_used", String(newUsed));
         setSessionsUsed(newUsed);
-        const audioUrl = data.audioBase64 ? `data:audio/mpeg;base64,${data.audioBase64}` : null;
-        setResult({ script: data.script, audioUrl, audioUnavailable: data.audioUnavailable || !data.audioBase64 });
+        // Stream audio from the dedicated endpoint — avoids parsing a 5-10MB base64
+        // blob inside JSON which causes the result screen to show unavailable.
+        const audioUrl = data.sessionId && !data.audioUnavailable
+          ? `${BACKEND_URL}/sessions/${data.sessionId}/audio?token=${encodeURIComponent(token)}`
+          : null;
+        console.log("[generate] sessionId:", data.sessionId, "audioUnavailable:", data.audioUnavailable, "audioUrl set:", !!audioUrl);
+        setResult({ script: data.script, audioUrl, audioUnavailable: data.audioUnavailable || !data.sessionId });
         if (audioUrl) setAudioPulse(true);
         setView("result");
         // Show install prompt after first session
