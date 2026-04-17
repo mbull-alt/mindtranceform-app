@@ -1175,8 +1175,11 @@ export default function MindTranceformApp() {
       const token = await getToken();
       const res = await fetch(`${BACKEND_URL}/sessions`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
+      if (!data.success) console.error("[sessions] Fetch error:", data.error);
       setSessions(data.sessions || []);
-    } catch {}
+    } catch (e) {
+      console.error("[sessions] Network error:", e.message);
+    }
     setSessionsLoading(false);
   }
 
