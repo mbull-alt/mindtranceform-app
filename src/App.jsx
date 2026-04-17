@@ -76,8 +76,51 @@ const EMPTY_FORM = {
   name: "", goal: "", program: "", voice: "", background: "",
   length: "5", style: "", personalization: "standard",
   fears: "", motivation: "", idealLife: "",
+  deepQ1: "", deepQ2: "", deepQ3: "", deepQ4: "",
   affirmationStyle: "", backgroundIntensity: "",
 };
+
+// Returns 4 program-specific deep personalization questions
+function getDeepQuestions(program) {
+  const qs = {
+    "Sleep": [
+      { id: "deepQ1", placeholder: "What thoughts or worries keep you awake at night?" },
+      { id: "deepQ2", placeholder: "What does a perfect night's sleep feel like to you?" },
+      { id: "deepQ3", placeholder: "How would consistently great sleep transform your life?" },
+      { id: "deepQ4", placeholder: "Describe your ideal sleep environment or bedtime ritual" },
+    ],
+    "Stress & Anxiety": [
+      { id: "deepQ1", placeholder: "What is the main source of your stress or anxiety right now?" },
+      { id: "deepQ2", placeholder: "Where do you feel stress in your body?" },
+      { id: "deepQ3", placeholder: "What does a calm, stress-free version of you look and feel like?" },
+      { id: "deepQ4", placeholder: "What one thing calms you most when you're overwhelmed?" },
+    ],
+    "Abundance": [
+      { id: "deepQ1", placeholder: "Describe your specific vision of abundance — money, time, freedom?" },
+      { id: "deepQ2", placeholder: "What limiting belief is blocking you from abundance?" },
+      { id: "deepQ3", placeholder: "What is the first thing you would do with full abundance?" },
+      { id: "deepQ4", placeholder: "Name someone who embodies the abundance you desire" },
+    ],
+    "Confidence": [
+      { id: "deepQ1", placeholder: "In what situation do you most want to feel confident?" },
+      { id: "deepQ2", placeholder: "Describe a fully confident version of yourself" },
+      { id: "deepQ3", placeholder: "What has been your biggest barrier to confidence?" },
+      { id: "deepQ4", placeholder: "What is one strength you already know you have?" },
+    ],
+    "Focus & Productivity": [
+      { id: "deepQ1", placeholder: "What is the most important thing you need to focus on right now?" },
+      { id: "deepQ2", placeholder: "What is your main distraction or mental block?" },
+      { id: "deepQ3", placeholder: "What does peak performance or total flow feel like for you?" },
+      { id: "deepQ4", placeholder: "Describe a past moment when you were completely in the zone" },
+    ],
+  };
+  return qs[program] || [
+    { id: "deepQ1", placeholder: "What are you afraid of or holding onto?" },
+    { id: "deepQ2", placeholder: "What truly motivates you?" },
+    { id: "deepQ3", placeholder: "Describe your ideal life in one sentence" },
+    { id: "deepQ4", placeholder: "What is the first change you want to make?" },
+  ];
+}
 
 function buildSteps(plan, isAdmin) {
   const steps = [
@@ -371,94 +414,191 @@ function Footer({ onOpenModal, onHowToUse }) {
 }
 
 // ─── BACKGROUND AUDIO ────────────────────────────────────────────────────────
+// scheduleRandom: fires fn after a random delay between minMs and maxMs, then
+// reschedules. Returns { stop() } to cancel. Used for thunder and seagulls.
+function scheduleRandom(fn, minMs, maxMs) {
+  let stopped = false;
+  let timer;
+  function schedule() {
+    if (stopped) return;
+    const delay = minMs + Math.random() * (maxMs - minMs);
+    timer = setTimeout(() => { if (!stopped) { fn(); schedule(); } }, delay);
+  }
+  schedule();
+  return { stop() { stopped = true; clearTimeout(timer); } };
+}
+
+// makePinkNoise: fills a 2-channel AudioBuffer with pink noise using the
+// Paul Kellet algorithm. scale controls overall amplitude.
+function makePinkNoise(ctx, seconds, scale) {
+  const sr = ctx.sampleRate;
+  const buf = ctx.createBuffer(2, sr * seconds, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+    for (let i = 0; i < d.length; i++) {
+      const w = Math.random() * 2 - 1;
+      b0=0.99886*b0+w*0.0555179; b1=0.99332*b1+w*0.0750759;
+      b2=0.96900*b2+w*0.1538520; b3=0.86650*b3+w*0.3104856;
+      b4=0.55000*b4+w*0.5329522; b5=-0.7616*b5-w*0.0168980;
+      d[i] = (b0+b1+b2+b3+b4+b5+b6+w*0.5362) * scale;
+      b6 = w * 0.115926;
+    }
+  }
+  return buf;
+}
+
 function buildBackgroundNodes(ctx, type, dest) {
   const nodes = [];
   try {
-    if (type === "432 Hz" || type === "528 Hz") {
-      const osc = ctx.createOscillator();
-      osc.type = "sine";
-      osc.frequency.value = type === "432 Hz" ? 432 : 528;
-      osc.connect(dest);
-      osc.start();
-      nodes.push(osc);
+    const now = ctx.currentTime;
 
-    } else if (type === "Theta Waves" || type === "Delta Sleep") {
-      // Binaural beat: left/right ear receive slightly different carrier frequencies.
-      // Theta: 200 Hz left, 206 Hz right → 6 Hz theta beat.
-      // Delta: 200 Hz left, 202 Hz right → 2 Hz delta beat.
-      const beat = type === "Theta Waves" ? 6 : 2;
-      [200, 200 + beat].forEach((freq, idx) => {
+    if (type === "432 Hz" || type === "528 Hz") {
+      const fundamental = type === "432 Hz" ? 432 : 528;
+
+      // Fade-in master gain over 3 s
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(0, now);
+      masterGain.gain.linearRampToValueAtTime(1, now + 3);
+      masterGain.connect(dest);
+
+      // Fundamental (65%), octave harmonic (20%), undertone (15%)
+      [[fundamental, 0.65], [fundamental * 2, 0.20], [fundamental / 2, 0.15]].forEach(([freq, amp]) => {
         const osc = ctx.createOscillator();
-        osc.type = "sine";
-        osc.frequency.value = freq;
-        const panner = ctx.createStereoPanner();
-        panner.pan.value = idx === 0 ? -1 : 1; // left ear, right ear
-        osc.connect(panner);
-        panner.connect(dest);
-        osc.start();
-        nodes.push(osc);
+        osc.type = "sine"; osc.frequency.value = freq;
+        const g = ctx.createGain(); g.gain.value = amp;
+        osc.connect(g); g.connect(masterGain); osc.start(); nodes.push(osc);
       });
 
-    } else if (type === "Rain" || type === "Ocean") {
-      const sr = ctx.sampleRate;
-      const seconds = 8;
-      const buf = ctx.createBuffer(2, sr * seconds, sr);
+      // Slow tremolo LFO — subtle ±7% AM at 0.1 Hz (432) or 0.15 Hz (528)
+      const tremoloLfo = ctx.createOscillator();
+      const tremoloGain = ctx.createGain();
+      tremoloLfo.type = "sine";
+      tremoloLfo.frequency.value = type === "432 Hz" ? 0.1 : 0.15;
+      tremoloGain.gain.value = 0.07;
+      tremoloLfo.connect(tremoloGain); tremoloGain.connect(masterGain.gain);
+      tremoloLfo.start(); nodes.push(tremoloLfo);
 
-      for (let ch = 0; ch < 2; ch++) {
-        const d = buf.getChannelData(ch);
-        // Paul Kellet pink noise — natural spectral balance for both rain and ocean
-        let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
-        for (let i = 0; i < d.length; i++) {
-          const w = Math.random() * 2 - 1;
-          b0 = 0.99886*b0 + w*0.0555179; b1 = 0.99332*b1 + w*0.0750759;
-          b2 = 0.96900*b2 + w*0.1538520; b3 = 0.86650*b3 + w*0.3104856;
-          b4 = 0.55000*b4 + w*0.5329522; b5 = -0.7616*b5 - w*0.0168980;
-          d[i] = (b0+b1+b2+b3+b4+b5+b6+w*0.5362) * (type === "Rain" ? 0.18 : 0.28);
-          b6 = w * 0.115926;
-        }
+    } else if (type === "Theta Waves" || type === "Delta Sleep") {
+      // Delta uses 180 Hz carrier (lower, more hypnotic); Theta uses 200 Hz
+      const carrier = type === "Theta Waves" ? 200 : 180;
+      const beat    = type === "Theta Waves" ? 6   : 2;
+
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(0, now);
+      masterGain.gain.linearRampToValueAtTime(1, now + 3);
+      masterGain.connect(dest);
+
+      // Binaural oscillators — hard-panned L/R
+      [carrier, carrier + beat].forEach((freq, idx) => {
+        const osc = ctx.createOscillator(); osc.type = "sine"; osc.frequency.value = freq;
+        const panner = ctx.createStereoPanner(); panner.pan.value = idx === 0 ? -1 : 1;
+        const g = ctx.createGain(); g.gain.value = 0.55;
+        osc.connect(g); g.connect(panner); panner.connect(masterGain); osc.start(); nodes.push(osc);
+      });
+
+      // Low-volume pink noise pad for texture (filtered below 300 Hz)
+      const noiseSrc = ctx.createBufferSource();
+      noiseSrc.buffer = makePinkNoise(ctx, 8, 0.04);
+      noiseSrc.loop = true;
+      const noiseLP = ctx.createBiquadFilter(); noiseLP.type = "lowpass"; noiseLP.frequency.value = 300;
+      noiseSrc.connect(noiseLP); noiseLP.connect(masterGain);
+      noiseSrc.start(); nodes.push(noiseSrc);
+
+      // Slow breathing LFO — 0.05 Hz Theta (20 s cycle), 0.03 Hz Delta (33 s cycle)
+      const breathLfo = ctx.createOscillator();
+      const breathGain = ctx.createGain();
+      breathLfo.type = "sine";
+      breathLfo.frequency.value = type === "Theta Waves" ? 0.05 : 0.03;
+      breathGain.gain.value = 0.06;
+      breathLfo.connect(breathGain); breathGain.connect(masterGain.gain);
+      breathLfo.start(); nodes.push(breathLfo);
+
+      // Delta only: 40 Hz sub-bass rumble
+      if (type === "Delta Sleep") {
+        const rumble = ctx.createOscillator();
+        rumble.type = "sine"; rumble.frequency.value = 40;
+        const rg = ctx.createGain(); rg.gain.value = 0.06;
+        rumble.connect(rg); rg.connect(masterGain); rumble.start(); nodes.push(rumble);
       }
 
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      src.loop = true;
+    } else if (type === "Rain") {
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(0, now);
+      masterGain.gain.linearRampToValueAtTime(1, now + 2);
+      masterGain.connect(dest);
 
-      if (type === "Rain") {
-        // Bandpass: bring out the mid-high sibilance of rainfall
-        const bp = ctx.createBiquadFilter();
-        bp.type = "bandpass";
-        bp.frequency.value = 4000;
-        bp.Q.value = 0.4;
-        src.connect(bp);
-        bp.connect(dest);
-      } else {
-        // Ocean: heavy low-pass + slow wave-like tremolo via LFO
-        const lp = ctx.createBiquadFilter();
-        lp.type = "lowpass";
-        lp.frequency.value = 600;
-        lp.Q.value = 0.7;
+      // Pink noise → bandpass at 1 kHz (mid-frequency sibilance of rain)
+      const noiseSrc = ctx.createBufferSource();
+      noiseSrc.buffer = makePinkNoise(ctx, 8, 0.22);
+      noiseSrc.loop = true;
+      const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1000; bp.Q.value = 0.4;
+      noiseSrc.connect(bp); bp.connect(masterGain);
+      noiseSrc.start(); nodes.push(noiseSrc);
 
-        const waveGain = ctx.createGain();
-        waveGain.gain.value = 0.65;
+      // 2 Hz raindrop LFO — gentle patter rhythm
+      const dropLfo = ctx.createOscillator();
+      const dropGain = ctx.createGain();
+      dropLfo.type = "sine"; dropLfo.frequency.value = 2;
+      dropGain.gain.value = 0.1;
+      dropLfo.connect(dropGain); dropGain.connect(masterGain.gain);
+      dropLfo.start(); nodes.push(dropLfo);
 
-        const lfo = ctx.createOscillator();
-        const lfoGain = ctx.createGain();
-        lfo.type = "sine";
-        lfo.frequency.value = 0.13; // ~8 s wave period
-        lfoGain.gain.value = 0.35;
-        lfo.connect(lfoGain);
-        lfoGain.connect(waveGain.gain); // modulate gain ±0.35 around 0.65
+      // Random distant thunder every 15–30 s: low-pass noise burst with decay
+      const thunderHandle = scheduleRandom(() => {
+        try {
+          const sr = ctx.sampleRate;
+          const tBuf = ctx.createBuffer(1, sr * 2, sr);
+          const td = tBuf.getChannelData(0);
+          for (let i = 0; i < td.length; i++) td[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / td.length, 1.5);
+          const tSrc = ctx.createBufferSource(); tSrc.buffer = tBuf;
+          const tLP = ctx.createBiquadFilter(); tLP.type = "lowpass"; tLP.frequency.value = 90;
+          const tGain = ctx.createGain(); tGain.gain.value = 0.5;
+          tSrc.connect(tLP); tLP.connect(tGain); tGain.connect(dest);
+          tSrc.start();
+        } catch {}
+      }, 15000, 30000);
+      nodes.push({ stop: () => thunderHandle.stop() });
 
-        src.connect(lp);
-        lp.connect(waveGain);
-        waveGain.connect(dest);
-        lfo.start();
-        src.start();
-        nodes.push(src, lfo);
-        return nodes;
-      }
+    } else if (type === "Ocean") {
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(0.3, now);
+      masterGain.gain.linearRampToValueAtTime(0.65, now + 3);
+      masterGain.connect(dest);
 
-      src.start();
-      nodes.push(src);
+      // Pink noise → low-pass at 600 Hz for deep ocean rumble
+      const noiseSrc = ctx.createBufferSource();
+      noiseSrc.buffer = makePinkNoise(ctx, 8, 0.30);
+      noiseSrc.loop = true;
+      const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 600; lp.Q.value = 0.7;
+      noiseSrc.connect(lp); lp.connect(masterGain);
+      noiseSrc.start(); nodes.push(noiseSrc);
+
+      // Slow wave LFO — 0.08 Hz (≈12 s wave period), ±35% gain modulation
+      const waveLfo = ctx.createOscillator();
+      const waveGain = ctx.createGain();
+      waveLfo.type = "sine"; waveLfo.frequency.value = 0.08;
+      waveGain.gain.value = 0.35;
+      waveLfo.connect(waveGain); waveGain.connect(masterGain.gain);
+      waveLfo.start(); nodes.push(waveLfo);
+
+      // Random seagull cry every 20–40 s: quick FM sweep 800 → 1200 → 900 Hz
+      const seagullHandle = scheduleRandom(() => {
+        try {
+          const sg = ctx.createOscillator(); sg.type = "sine";
+          const t0 = ctx.currentTime;
+          sg.frequency.setValueAtTime(800, t0);
+          sg.frequency.linearRampToValueAtTime(1200, t0 + 0.3);
+          sg.frequency.linearRampToValueAtTime(900, t0 + 0.65);
+          const sgGain = ctx.createGain();
+          sgGain.gain.setValueAtTime(0, t0);
+          sgGain.gain.linearRampToValueAtTime(0.07, t0 + 0.1);
+          sgGain.gain.linearRampToValueAtTime(0, t0 + 0.75);
+          sg.connect(sgGain); sgGain.connect(dest);
+          sg.start(); sg.stop(t0 + 0.85);
+        } catch {}
+      }, 20000, 40000);
+      nodes.push({ stop: () => seagullHandle.stop() });
     }
   } catch (e) {
     console.error("Background audio error:", e);
@@ -1129,103 +1269,26 @@ export default function MindTranceformApp() {
     if (bgPreviewPlaying === bgName) { stopBgPreview(); return; }
     stopBgPreview();
 
-    // All previews use Web Audio API — no external URLs needed
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
     try {
       const ctx = new AudioCtx();
       bgPreviewCtxRef.current = ctx;
+      const now = ctx.currentTime;
+
+      // Master output gain — previews use the same audio graph as the real player
+      // but delegate to buildBackgroundNodes so both stay in sync automatically.
       const gain = ctx.createGain();
       gain.gain.value = 0.18;
       gain.connect(ctx.destination);
 
-      if (bgName === "432 Hz" || bgName === "528 Hz") {
-        const osc = ctx.createOscillator();
-        osc.type = "sine";
-        osc.frequency.value = bgName === "432 Hz" ? 432 : 528;
-        osc.connect(gain);
-        osc.start();
-
-      } else if (bgName === "Theta Waves" || bgName === "Delta Sleep") {
-        // Theta: 200 Hz left, 206 Hz right → 6 Hz beat
-        // Delta: 200 Hz left, 202 Hz right → 2 Hz beat
-        const beat = bgName === "Theta Waves" ? 6 : 2;
-        [200, 200 + beat].forEach((freq, idx) => {
-          const osc = ctx.createOscillator();
-          osc.type = "sine";
-          osc.frequency.value = freq;
-          const panner = ctx.createStereoPanner();
-          panner.pan.value = idx === 0 ? -1 : 1; // left ear, right ear
-          osc.connect(panner);
-          panner.connect(gain);
-          osc.start();
-        });
-
-      } else if (bgName === "Ocean") {
-        // White noise → low-pass at 800 Hz → slow amplitude wave at 0.1 Hz
-        const sr = ctx.sampleRate;
-        const buf = ctx.createBuffer(2, sr * 4, sr);
-        for (let ch = 0; ch < 2; ch++) {
-          const d = buf.getChannelData(ch);
-          for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-        }
-        const src = ctx.createBufferSource();
-        src.buffer = buf;
-        src.loop = true;
-        const lp = ctx.createBiquadFilter();
-        lp.type = "lowpass";
-        lp.frequency.value = 800;
-        lp.Q.value = 0.5;
-        const waveGain = ctx.createGain();
-        waveGain.gain.value = 0.55;
-        const lfo = ctx.createOscillator();
-        const lfoGain = ctx.createGain();
-        lfo.type = "sine";
-        lfo.frequency.value = 0.1; // one wave every 10 seconds
-        lfoGain.gain.value = 0.4;
-        lfo.connect(lfoGain);
-        lfoGain.connect(waveGain.gain);
-        src.connect(lp);
-        lp.connect(waveGain);
-        waveGain.connect(gain);
-        lfo.start();
-        src.start();
-
-      } else if (bgName === "Rain") {
-        // White noise → bandpass → gentle amplitude flutter at 0.3 Hz
-        const sr = ctx.sampleRate;
-        const buf = ctx.createBuffer(2, sr * 4, sr);
-        for (let ch = 0; ch < 2; ch++) {
-          const d = buf.getChannelData(ch);
-          for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-        }
-        const src = ctx.createBufferSource();
-        src.buffer = buf;
-        src.loop = true;
-        const bp = ctx.createBiquadFilter();
-        bp.type = "bandpass";
-        bp.frequency.value = 3000;
-        bp.Q.value = 0.5;
-        const waveGain = ctx.createGain();
-        waveGain.gain.value = 0.6;
-        const lfo = ctx.createOscillator();
-        const lfoGain = ctx.createGain();
-        lfo.type = "sine";
-        lfo.frequency.value = 0.3; // gentle patter rhythm
-        lfoGain.gain.value = 0.3;
-        lfo.connect(lfoGain);
-        lfoGain.connect(waveGain.gain);
-        src.connect(bp);
-        bp.connect(waveGain);
-        waveGain.connect(gain);
-        lfo.start();
-        src.start();
-      }
+      // Reuse the exact same graph-building logic used during real sessions
+      buildBackgroundNodes(ctx, bgName, gain);
 
       setBgPreviewPlaying(bgName);
-      // Fade out over last 2 seconds of the 15-second preview
-      gain.gain.setValueAtTime(gain.gain.value, ctx.currentTime + 13);
-      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 15);
+      // Fade out over last 2 s of the 15-second preview
+      gain.gain.setValueAtTime(gain.gain.value, now + 13);
+      gain.gain.linearRampToValueAtTime(0, now + 15);
       bgPreviewTimerRef.current = setTimeout(() => stopBgPreview(), 15000);
     } catch (e) {
       console.error("Background preview error:", e);
@@ -1266,6 +1329,10 @@ export default function MindTranceformApp() {
           fears: form.fears,
           motivation: form.motivation,
           idealLife: form.idealLife,
+          deepQ1: form.deepQ1,
+          deepQ2: form.deepQ2,
+          deepQ3: form.deepQ3,
+          deepQ4: form.deepQ4,
           affirmationStyle: form.affirmationStyle,
           backgroundIntensity: form.backgroundIntensity,
           white_label_id: whiteLabel?.id || null,
@@ -1301,8 +1368,8 @@ export default function MindTranceformApp() {
     } else if (s.type === "personalization") {
       if (!form[s.id]) { setError("Please choose an option."); return; }
       if (form.personalization === "deep") {
-        if (!form.fears.trim() || !form.motivation.trim() || !form.idealLife.trim()) {
-          setError("Please fill in all three fields to continue."); return;
+        if (!form.deepQ1.trim() || !form.deepQ2.trim() || !form.deepQ3.trim() || !form.deepQ4.trim()) {
+          setError("Please fill in all four fields to continue."); return;
         }
       }
     } else {
@@ -3099,12 +3166,16 @@ export default function MindTranceformApp() {
               <OptionList options={current.options} selected={form[current.id]} onSelect={(val) => { updateForm(current.id, val); setError(""); }} />
               {form.personalization === "deep" && (
                 <div style={{ marginTop: "1.25rem", display: "grid", gap: "0.6rem" }}>
-                  <input style={S.input} type="text" placeholder="What are you afraid of or holding onto?" value={form.fears}
-                    onChange={(e) => { updateForm("fears", e.target.value); setError(""); }} />
-                  <input style={S.input} type="text" placeholder="What truly motivates you?" value={form.motivation}
-                    onChange={(e) => { updateForm("motivation", e.target.value); setError(""); }} />
-                  <input style={S.input} type="text" placeholder="Describe your ideal life in one sentence" value={form.idealLife}
-                    onChange={(e) => { updateForm("idealLife", e.target.value); setError(""); }} />
+                  {getDeepQuestions(form.program).map(({ id, placeholder }) => (
+                    <input
+                      key={id}
+                      style={S.input}
+                      type="text"
+                      placeholder={placeholder}
+                      value={form[id]}
+                      onChange={(e) => { updateForm(id, e.target.value); setError(""); }}
+                    />
+                  ))}
                 </div>
               )}
             </>
