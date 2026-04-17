@@ -1188,6 +1188,7 @@ export default function MindTranceformApp() {
       const token = await getToken();
       const res = await fetch(`${BACKEND_URL}/sessions/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
+      console.log("[openSession] response:", { success: data.success, hasAudio: !!data.session?.audioBase64, error: data.error });
       if (data.session) {
         setSelectedSession({
           ...data.session,
@@ -1195,7 +1196,9 @@ export default function MindTranceformApp() {
         });
         setView("sessionDetail");
       }
-    } catch {}
+    } catch (e) {
+      console.error("[openSession] error:", e.message);
+    }
   }
 
   async function fetchSubStatus() {
@@ -2306,8 +2309,11 @@ export default function MindTranceformApp() {
           <div style={{ fontSize: "0.75rem", color: "#8a879e", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "1.25rem" }}>
             {selectedSession.program} · {selectedSession.voice}
           </div>
-          {selectedSession.audioUrl &&
-            <><audio controls style={S.audio} src={selectedSession.audioUrl} /><div style={S.audioNote}>Your personalized audio session</div></>
+          {selectedSession.audioUrl
+            ? <><audio controls style={S.audio} src={selectedSession.audioUrl} /><div style={S.audioNote}>Your personalized audio session</div></>
+            : <div style={{ fontSize: "0.82rem", color: "#8a879e", textAlign: "center", padding: "0.75rem 0 0.25rem", marginBottom: "0.5rem" }}>
+                Audio not available for this session — generate a new session to get audio playback.
+              </div>
           }
           {selectedSession.background && (
             <BackgroundPlayer background={selectedSession.background} intensity={selectedSession.backgroundIntensity} />
