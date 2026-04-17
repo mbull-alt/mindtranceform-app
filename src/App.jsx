@@ -1188,13 +1188,14 @@ export default function MindTranceformApp() {
       const token = await getToken();
       const res = await fetch(`${BACKEND_URL}/sessions/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
-      console.log("[openSession] response:", { success: data.success, hasAudio: !!data.session?.audioBase64, error: data.error });
       if (data.session) {
-        setSelectedSession({
-          ...data.session,
-          audioUrl: data.session.audioBase64 ? `data:audio/mpeg;base64,${data.session.audioBase64}` : null,
-        });
+        // Audio is streamed directly from the dedicated endpoint — no base64 parsing needed.
+        // The token is passed as a query param so the <audio> element can use the URL as-is.
+        const audioUrl = `${BACKEND_URL}/sessions/${id}/audio?token=${encodeURIComponent(token)}`;
+        setSelectedSession({ ...data.session, audioUrl, audioError: false });
         setView("sessionDetail");
+      } else {
+        console.error("[openSession] error:", data.error);
       }
     } catch (e) {
       console.error("[openSession] error:", e.message);
@@ -2309,30 +2310,41 @@ export default function MindTranceformApp() {
           <div style={{ fontSize: "0.75rem", color: "#8a879e", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "1.25rem" }}>
             {selectedSession.program} · {selectedSession.voice}
           </div>
-          {selectedSession.audioUrl
-            ? <><audio controls style={S.audio} src={selectedSession.audioUrl} /><div style={S.audioNote}>Your personalized audio session</div></>
-            : <div style={{ fontSize: "0.82rem", color: "#8a879e", textAlign: "center", padding: "0.75rem 0 0.25rem", marginBottom: "0.5rem" }}>
+          {selectedSession.audioError
+            ? <div style={{ fontSize: "0.82rem", color: "#8a879e", textAlign: "center", padding: "0.75rem 0 0.25rem", marginBottom: "0.5rem" }}>
                 Audio not available for this session — generate a new session to get audio playback.
               </div>
+            : <><audio
+                controls
+                style={S.audio}
+                src={selectedSession.audioUrl}
+                onError={() => setSelectedSession(s => ({ ...s, audioError: true }))}
+              /><div style={S.audioNote}>Your personalized audio session</div></>
           }
           {selectedSession.background && (
             <BackgroundPlayer background={selectedSession.background} intensity={selectedSession.backgroundIntensity} />
           )}
           <div style={S.scriptBox}>{selectedSession.script}</div>
-          {selectedSession.audioUrl && (
+          {!selectedSession.audioError && (
             !plan ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", marginBottom: "0.5rem", fontSize: "0.82rem", color: "#8a879e" }}>
                 <span>🔒</span><span>Upgrade to Premium to download your sessions</span>
               </div>
             ) : (
               <div style={{ ...S.row, marginBottom: "0.5rem" }}>
-                <button style={S.btn} onClick={() => {
-                  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-                  const d = new Date();
-                  const a = document.createElement("a");
-                  a.href = selectedSession.audioUrl;
-                  a.download = `MindTranceform-${selectedSession.program || "Session"}-${months[d.getMonth()]}-${d.getDate()}-${d.getFullYear()}.mp3`;
-                  a.click();
+                <button style={S.btn} onClick={async () => {
+                  try {
+                    const resp = await fetch(selectedSession.audioUrl);
+                    const blob = await resp.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+                    const d = new Date();
+                    const a = document.createElement("a");
+                    a.href = blobUrl;
+                    a.download = `MindTranceform-${selectedSession.program || "Session"}-${months[d.getMonth()]}-${d.getDate()}-${d.getFullYear()}.mp3`;
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+                  } catch {}
                 }}>↓ Download MP3</button>
                 {plan === "pro" && (
                   <button style={S.btn} onClick={() => navigator.clipboard.writeText("I just created a personalized meditation with Mind Tranceform — try it free at mindtranceform.com")}>Share</button>
