@@ -758,6 +758,15 @@ function Logo({ sub = false, brand = null }) {
   );
 }
 
+// Renders a session script with proper paragraph breaks and no raw SSML markup.
+function renderScript(script) {
+  if (!script) return null;
+  const stripped = script.replace(/<[^>]*>/g, "");
+  const paras = stripped.split(/\n\n+/).map(p => p.trim()).filter(Boolean);
+  if (paras.length <= 1) return stripped.trim();
+  return paras.map((p, i) => <p key={i} style={{ margin: "0 0 1em 0" }}>{p}</p>);
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function MindTranceformApp() {
   const [user, setUser]           = useState(null);
@@ -802,6 +811,7 @@ export default function MindTranceformApp() {
   const bgPreviewCtxRef   = useRef(null);
   const bgPreviewAudioRef = useRef(null);
   const bgPreviewTimerRef = useRef(null);
+  const sessionStateRef   = useRef({});
   const [bgPreviewPlaying, setBgPreviewPlaying] = useState(null);
   const [bgPreviewLoading, setBgPreviewLoading] = useState(null);
 
@@ -922,6 +932,48 @@ export default function MindTranceformApp() {
     if (view === "wladmin" && user) loadWlAdmin();
   }, [view]);
 
+  // Keep sessionStateRef current so the pagehide/visibilitychange handler always sees
+  // the latest state without needing to re-register the listeners.
+  useEffect(() => {
+    sessionStateRef.current = { view, result, selectedSession, form, user };
+  }, [view, result, selectedSession, form, user]);
+
+  // Persist the active session to localStorage whenever the app goes to background
+  // (screen lock, tab switch, PWA suspend) and restore it on resume so the session
+  // is not lost — equivalent to AppState + AsyncStorage in React Native.
+  useEffect(() => {
+    const RESTORABLE = new Set(["result", "sessionDetail", "home", "sessions", "generate", "account"]);
+    function saveSessionState() {
+      const { view: v, result: r, selectedSession: ss, form: f, user: u } = sessionStateRef.current;
+      if (!u || !RESTORABLE.has(v)) return;
+      try {
+        localStorage.setItem("mt_session_state", JSON.stringify({
+          view: v, result: r, selectedSession: ss, form: f, savedAt: Date.now(),
+        }));
+      } catch {}
+    }
+    const onVisibilityChange = () => { if (document.visibilityState === "hidden") saveSessionState(); };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", saveSessionState);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pagehide", saveSessionState);
+    };
+  }, []); // register once; sessionStateRef always holds fresh values
+
+  // Register MediaSession metadata so the OS shows lock-screen audio controls and
+  // keeps playback alive when the screen locks (consistent with other meditation apps).
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    const s = result || selectedSession;
+    if (!s) { navigator.mediaSession.metadata = null; return; }
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: s.program || s.title || "Meditation Session",
+      artist: "Mind Tranceform",
+      album: s.voice || "",
+    });
+  }, [result, selectedSession]);
+
   // Clear rating timer on view change away from result
   useEffect(() => {
     if (view !== "result") {
@@ -1012,8 +1064,27 @@ export default function MindTranceformApp() {
         const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
         if (currentPath === "/admin/content") {
           setView(session?.user?.email === adminEmail ? "adminContent" : (session?.user ? "home" : "landing"));
+        } else if (session?.user) {
+          // Attempt to restore a session interrupted by screen lock / PWA suspend.
+          const RESTORE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+          let restored = false;
+          try {
+            const raw = localStorage.getItem("mt_session_state");
+            if (raw) {
+              const saved = JSON.parse(raw);
+              localStorage.removeItem("mt_session_state");
+              if (saved.savedAt && Date.now() - saved.savedAt < RESTORE_TTL_MS) {
+                if (saved.result)          setResult(saved.result);
+                if (saved.selectedSession) setSelectedSession(saved.selectedSession);
+                if (saved.form)            setForm(saved.form);
+                setView(saved.view || "home");
+                restored = true;
+              }
+            }
+          } catch {}
+          if (!restored) setView("home");
         } else {
-          setView(session?.user ? "home" : (isRootPath ? "landing" : "auth"));
+          setView(isRootPath ? "landing" : "auth");
         }
       }
       setAuthReady(true);
@@ -1190,25 +1261,39 @@ export default function MindTranceformApp() {
   }
 
   async function openSession(id) {
-    console.log(`[openSession] Loading session id=${id}`);
+    console.log(`[openSession] Loading session_id=${id}`);
     setSessionDetailLoading(true);
     setSessionDetailError("");
     try {
       const token = await getToken();
       const res = await fetch(`${BACKEND_URL}/sessions/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error(`[openSession] HTTP ${res.status} for session_id=${id}: ${errText}`);
+        setSessionDetailError("Could not load this session. Please try again.");
+        return;
+      }
       const data = await res.json();
+      console.log(`[openSession] session_id=${id} — success=${data.success}, error="${data.error}", session keys=${data.session ? Object.keys(data.session).join(",") : "none"}`);
       if (data.session) {
+        const s = data.session;
+        const missing = ["id", "title", "script"].filter(f => !s[f]);
+        if (missing.length > 0) {
+          console.error(`[openSession] session_id=${id} missing required fields: ${missing.join(", ")}; received:`, JSON.stringify(s));
+          setSessionDetailError("Could not load this session. Please try again.");
+          return;
+        }
         // Audio is streamed directly from the dedicated endpoint — no base64 parsing needed.
         // The token is passed as a query param so the <audio> element can use the URL as-is.
         const audioUrl = `${BACKEND_URL}/sessions/${id}/audio?token=${encodeURIComponent(token)}`;
-        setSelectedSession({ ...data.session, audioUrl, audioError: false });
+        setSelectedSession({ ...s, audioUrl, audioError: false });
         setView("sessionDetail");
       } else {
-        console.error("[openSession] error:", data.error);
+        console.error(`[openSession] No session in response for session_id=${id} — error="${data.error}", full response:`, JSON.stringify(data));
         setSessionDetailError("Could not load this session. Please try again.");
       }
     } catch (e) {
-      console.error("[openSession] error:", e.message);
+      console.error(`[openSession] Exception for session_id=${id}:`, e.message, e);
       setSessionDetailError("Network error loading session. Please try again.");
     } finally {
       setSessionDetailLoading(false);
@@ -2039,7 +2124,7 @@ export default function MindTranceformApp() {
                 <span>For best results, use headphones — especially for <strong style={{ color: "#a8d8c8" }}>{form.background}</strong></span>
               </div>
             )}
-            <div style={S.scriptBox}>{result.script}</div>
+            <div style={S.scriptBox}>{renderScript(result.script)}</div>
             <div style={S.row}>
               <button style={S.btn} onClick={() => setView("home")}>Home</button>
               <button style={S.btnPrimary} onClick={generate}>✦ Regenerate</button>
@@ -2355,7 +2440,7 @@ export default function MindTranceformApp() {
           {selectedSession.background && (
             <BackgroundPlayer background={selectedSession.background} intensity={selectedSession.backgroundIntensity} />
           )}
-          <div style={S.scriptBox}>{selectedSession.script}</div>
+          <div style={S.scriptBox}>{renderScript(selectedSession.script)}</div>
           {!selectedSession.audioError && (
             !plan ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem", marginBottom: "0.5rem", fontSize: "0.82rem", color: "#8a879e" }}>
