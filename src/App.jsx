@@ -1104,12 +1104,20 @@ export default function MindTranceformApp() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      const currentPath = window.location.pathname;
-      const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
-      if (currentPath === "/admin/content" && u?.email === adminEmail) {
-        setView("adminContent");
-      } else {
-        setView(u ? "home" : "landing");
+      // TOKEN_REFRESHED fires silently on app resume — it must NOT reset the view
+      // because the session state may have just been restored from localStorage.
+      // INITIAL_SESSION is handled by getSession() above.
+      // Only SIGNED_IN and SIGNED_OUT should drive a view transition.
+      if (event === "SIGNED_IN") {
+        const currentPath = window.location.pathname;
+        const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
+        if (currentPath === "/admin/content" && u?.email === adminEmail) {
+          setView("adminContent");
+        } else {
+          setView("home");
+        }
+      } else if (event === "SIGNED_OUT") {
+        setView("landing");
       }
       if (u) {
         localStorage.setItem("mt_user_id", u.id);
