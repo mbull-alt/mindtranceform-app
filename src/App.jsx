@@ -161,7 +161,7 @@ const S = {
     fontWeight: 300,
     padding: "0 1.25rem 4rem",
     position: "relative",
-    overflow: "hidden",
+    overflowX: "hidden", // clip star field horizontally; allow vertical scroll for tall steps
   },
   wrap: { maxWidth: 560, margin: "0 auto", position: "relative", zIndex: 1 },
   logo: { textAlign: "center", padding: "2.5rem 0 2rem" },
@@ -611,7 +611,8 @@ function BackgroundPlayer({ background, intensity }) {
   const nodesRef = useRef([]);
   const gainRef  = useRef(null);
 
-  const defaultVol = { Subtle: 15, Balanced: 30, Immersive: 50 }[intensity] ?? 25;
+  const BG_VOLUME  = { Subtle: 10, Balanced: 15, Immersive: 20 }; // max 0.20 to stay below voice track
+  const defaultVol = BG_VOLUME[intensity] ?? 15;
   const [vol, setVol]       = useState(defaultVol);
   const [playing, setPlaying] = useState(false);
 
@@ -808,9 +809,11 @@ export default function MindTranceformApp() {
   const [bgInstructionsChecked, setBgInstructionsChecked] = useState(false);
 
   // Sessions
-  const [sessions, setSessions]               = useState([]);
-  const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [selectedSession, setSelectedSession] = useState(null);
+  const [sessions, setSessions]                         = useState([]);
+  const [sessionsLoading, setSessionsLoading]           = useState(false);
+  const [selectedSession, setSelectedSession]           = useState(null);
+  const [sessionDetailLoading, setSessionDetailLoading] = useState(false);
+  const [sessionDetailError, setSessionDetailError]     = useState("");
 
   // Account / subscription
   const [welcomeMsg, setWelcomeMsg]       = useState("");
@@ -897,6 +900,7 @@ export default function MindTranceformApp() {
       @keyframes twinkle { 0%{opacity:0.1} 100%{opacity:0.6} }
       @keyframes pulseRing { 0%,100%{transform:scale(1);opacity:0.6} 50%{transform:scale(1.12);opacity:1} }
       @keyframes dotPop { 0%,60%,100%{transform:scale(1);opacity:0.4} 30%{transform:scale(1.4);opacity:1} }
+      @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
     `;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
@@ -1186,6 +1190,9 @@ export default function MindTranceformApp() {
   }
 
   async function openSession(id) {
+    console.log(`[openSession] Loading session id=${id}`);
+    setSessionDetailLoading(true);
+    setSessionDetailError("");
     try {
       const token = await getToken();
       const res = await fetch(`${BACKEND_URL}/sessions/${id}`, { headers: { Authorization: `Bearer ${token}` } });
@@ -1198,9 +1205,13 @@ export default function MindTranceformApp() {
         setView("sessionDetail");
       } else {
         console.error("[openSession] error:", data.error);
+        setSessionDetailError("Could not load this session. Please try again.");
       }
     } catch (e) {
       console.error("[openSession] error:", e.message);
+      setSessionDetailError("Network error loading session. Please try again.");
+    } finally {
+      setSessionDetailLoading(false);
     }
   }
 
@@ -2288,12 +2299,25 @@ export default function MindTranceformApp() {
         <Logo brand={whiteLabel} />
         <div style={S.card}>
           <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "1.25rem" }}>My Sessions</div>
-          {sessionsLoading && <div style={{ color: "#8a879e", textAlign: "center", padding: "2rem 0" }}>Loading...</div>}
+          {sessionsLoading && (
+            <div style={{ color: "#8a879e", textAlign: "center", padding: "2rem 0" }}>
+              <div style={{ fontSize: "1.4rem", animation: "spin 1s linear infinite", display: "inline-block" }}>◌</div>
+              <div style={{ marginTop: "0.5rem", fontSize: "0.85rem" }}>Loading your sessions…</div>
+            </div>
+          )}
+          {sessionDetailLoading && (
+            <div style={{ color: "#a8d8c8", textAlign: "center", padding: "0.75rem 0", fontSize: "0.85rem" }}>
+              Opening session…
+            </div>
+          )}
+          {sessionDetailError && (
+            <div style={S.errorBox}>{sessionDetailError}</div>
+          )}
           {!sessionsLoading && sessions.length === 0 && (
             <div style={{ color: "#8a879e", textAlign: "center", padding: "2rem 0" }}>No sessions yet. Generate your first one!</div>
           )}
           {sessions.map((s) => (
-            <div key={s.id} style={S.sessionItem} onClick={() => openSession(s.id)}>
+            <div key={s.id} style={{ ...S.sessionItem, opacity: sessionDetailLoading ? 0.5 : 1, pointerEvents: sessionDetailLoading ? "none" : "auto" }} onClick={() => openSession(s.id)}>
               <div style={{ fontSize: "0.92rem", color: "#e8e6f0" }}>{s.title}</div>
               <div style={{ fontSize: "0.75rem", color: "#8a879e", marginTop: 3 }}>{s.program} · {s.voice}</div>
             </div>
@@ -3195,10 +3219,9 @@ export default function MindTranceformApp() {
               {form.personalization === "deep" && (
                 <div style={{ marginTop: "1.25rem", display: "grid", gap: "0.6rem" }}>
                   {getDeepQuestions(form.program).map(({ id, placeholder }) => (
-                    <input
+                    <textarea
                       key={id}
-                      style={S.input}
-                      type="text"
+                      style={{ ...S.input, minHeight: 72, resize: "vertical", lineHeight: 1.55, overflow: "auto" }}
                       placeholder={placeholder}
                       value={form[id]}
                       onChange={(e) => { updateForm(id, e.target.value); setError(""); }}
