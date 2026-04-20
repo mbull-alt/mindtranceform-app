@@ -1440,7 +1440,6 @@ export default function MindTranceformApp() {
           deepQ4: form.deepQ4,
           affirmationStyle: form.affirmationStyle,
           backgroundIntensity: form.backgroundIntensity,
-          white_label_id: whiteLabel?.id || null,
         }),
       });
       const data = await response.json();
