@@ -758,6 +758,59 @@ function Logo({ sub = false, brand = null }) {
   );
 }
 
+// Custom audio player with scrub bar and ±15 s skip controls.
+function SessionAudioPlayer({ src, className, onPlay, onPause, onError, noteText }) {
+  const ref = useRef(null);
+  const [currentTime, setCurrent] = useState(0);
+  const [duration, setDuration]   = useState(0);
+  const [playing, setPlaying]     = useState(false);
+
+  function fmt(s) {
+    if (!isFinite(s) || s < 0) return "0:00";
+    return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  }
+  function skip(delta) {
+    const a = ref.current;
+    if (a) a.currentTime = Math.max(0, Math.min((a.currentTime || 0) + delta, a.duration || 0));
+  }
+  const ring = { background: "rgba(168,216,200,0.08)", border: "0.5px solid rgba(168,216,200,0.25)", borderRadius: 8, color: "#a8d8c8", cursor: "pointer", fontSize: "0.82rem", padding: "0.45rem 0.75rem", lineHeight: 1 };
+
+  return (
+    <div style={{ marginBottom: "1.25rem" }}>
+      <audio
+        ref={ref}
+        src={src}
+        className={className}
+        style={{ display: "none" }}
+        onTimeUpdate={() => setCurrent(ref.current?.currentTime || 0)}
+        onLoadedMetadata={() => setDuration(ref.current?.duration || 0)}
+        onPlay={() => { setPlaying(true); onPlay?.(); }}
+        onPause={() => { setPlaying(false); onPause?.(); }}
+        onEnded={() => setPlaying(false)}
+        onError={onError}
+      />
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+        <button style={ring} onClick={() => skip(-15)} title="Back 15 seconds">↺ 15s</button>
+        <button
+          style={{ ...ring, flex: 1, fontSize: "1rem", padding: "0.5rem", background: "rgba(168,216,200,0.14)" }}
+          onClick={() => playing ? ref.current?.pause() : ref.current?.play()}
+        >{playing ? "⏸ Pause" : "▶ Play"}</button>
+        <button style={ring} onClick={() => skip(15)} title="Forward 15 seconds">15s ↻</button>
+      </div>
+      <input
+        type="range" min={0} max={duration || 0} step={0.5} value={currentTime}
+        onChange={e => { if (ref.current) ref.current.currentTime = parseFloat(e.target.value); }}
+        style={{ width: "100%", accentColor: "#a8d8c8", cursor: "pointer", marginBottom: "0.25rem" }}
+      />
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "#8a879e" }}>
+        <span>{fmt(currentTime)}</span>
+        <span>{duration > 0 ? fmt(duration) : "--:--"}</span>
+      </div>
+      {noteText && <div style={{ fontSize: "0.73rem", color: "#8a879e", textAlign: "center", marginTop: "0.35rem" }}>{noteText}</div>}
+    </div>
+  );
+}
+
 // Renders a session script with proper paragraph breaks and no raw SSML markup.
 function renderScript(script) {
   if (!script) return null;
@@ -2098,14 +2151,13 @@ export default function MindTranceformApp() {
               </div>
             )}
             {result.audioUrl
-              ? <><audio
-                  controls
-                  style={S.audio}
+              ? <SessionAudioPlayer
                   src={result.audioUrl}
                   className={audioPulse ? "audio-pulse" : undefined}
+                  noteText="Your personalized audio session"
                   onPlay={() => {
                     setAudioPulse(false);
-                    if (ratedSessionId === result.audioUrl) return; // already shown for this session
+                    if (ratedSessionId === result.audioUrl) return;
                     clearTimeout(ratingTimerRef.current);
                     ratingTimerRef.current = setTimeout(() => {
                       setRatingState("prompt");
@@ -2113,7 +2165,7 @@ export default function MindTranceformApp() {
                     }, 60000);
                   }}
                   onPause={() => clearTimeout(ratingTimerRef.current)}
-                /><div style={S.audioNote}>Your personalized audio session</div></>
+                />
               : <div style={S.infoBox}>{result.audioUnavailable ? "Audio is temporarily unavailable — your personalized script is ready below." : "Your personalized script is ready below."}</div>
             }
             {form.background && (
@@ -2437,12 +2489,11 @@ export default function MindTranceformApp() {
             ? <div style={{ fontSize: "0.82rem", color: "#8a879e", textAlign: "center", padding: "0.75rem 0 0.25rem", marginBottom: "0.5rem" }}>
                 Audio not available for this session — generate a new session to get audio playback.
               </div>
-            : <><audio
-                controls
-                style={S.audio}
+            : <SessionAudioPlayer
                 src={selectedSession.audioUrl}
+                noteText="Your personalized audio session"
                 onError={() => setSelectedSession(s => ({ ...s, audioError: true }))}
-              /><div style={S.audioNote}>Your personalized audio session</div></>
+              />
           }
           {selectedSession.background && (
             <BackgroundPlayer background={selectedSession.background} intensity={selectedSession.backgroundIntensity} />
