@@ -921,6 +921,9 @@ export default function MindTranceformApp() {
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState(null);
   const [genStep, setGenStep] = useState(0);
+  const [sseChunk, setSseChunk] = useState(0);
+  const [sseTotalChunks, setSseTotalChunks] = useState(0);
+  const [sseMessage, setSseMessage] = useState("");
   const [audioPulse, setAudioPulse] = useState(false);
 
   // Voice preview
@@ -1039,12 +1042,9 @@ export default function MindTranceformApp() {
     return () => document.head.removeChild(style);
   }, []);
 
-  // Progress steps timer
+  // Reset progress state when generation finishes.
   useEffect(() => {
-    if (!generating) { setGenStep(0); return; }
-    const t1 = setTimeout(() => setGenStep(1), 3500);
-    const t2 = setTimeout(() => setGenStep(2), 8000);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
+    if (!generating) { setGenStep(0); setSseChunk(0); setSseTotalChunks(0); setSseMessage(""); }
   }, [generating]);
 
   // Fetch public testimonials on first load
@@ -1623,39 +1623,88 @@ useEffect(() => {
 
     setGenerating(true);
     setError("");
+    setGenStep(0);
+    setSseChunk(0);
+    setSseTotalChunks(0);
+    setSseMessage("");
     try {
       const token = await getToken();
+      const body = JSON.stringify({
+        name: form.name, goal: form.goal, program: form.program, voice: form.voice,
+        background: form.background, length: form.length, style: form.style,
+        personalization: form.personalization, fears: form.fears, motivation: form.motivation,
+        idealLife: form.idealLife, deepQ1: form.deepQ1, deepQ2: form.deepQ2,
+        deepQ3: form.deepQ3, deepQ4: form.deepQ4,
+        affirmationStyle: form.affirmationStyle, backgroundIntensity: form.backgroundIntensity,
+      });
       const response = await fetch(`${BACKEND_URL}/generate-session`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          name: form.name,
-          goal: form.goal,
-          program: form.program,
-          voice: form.voice,
-          background: form.background,
-          length: form.length,
-          style: form.style,
-          personalization: form.personalization,
-          fears: form.fears,
-          motivation: form.motivation,
-          idealLife: form.idealLife,
-          deepQ1: form.deepQ1,
-          deepQ2: form.deepQ2,
-          deepQ3: form.deepQ3,
-          deepQ4: form.deepQ4,
-          affirmationStyle: form.affirmationStyle,
-          backgroundIntensity: form.backgroundIntensity,
-        }),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, Accept: "text/event-stream" },
+        body,
       });
+
+      const isSSE = response.headers.get("content-type")?.includes("text/event-stream");
+
+      if (isSSE && response.ok) {
+        // SSE streaming path — drive the progress UI from real backend events.
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let done = false;
+
+        while (!done) {
+          const { done: streamDone, value } = await reader.read();
+          if (streamDone) break;
+          buf += decoder.decode(value, { stream: true });
+          const parts = buf.split("\n\n");
+          buf = parts.pop() ?? "";
+
+          for (const part of parts) {
+            const line = part.trim();
+            if (!line.startsWith("data: ")) continue;
+            let ev;
+            try { ev = JSON.parse(line.slice(6)); } catch { continue; }
+
+            if (ev.message) setSseMessage(ev.message);
+
+            if (ev.stage === "script_generating" || ev.stage === "script_expanding") {
+              setGenStep(0);
+            } else if (ev.stage === "synthesizing") {
+              setGenStep(1);
+              setSseChunk(ev.chunk || 0);
+              setSseTotalChunks(ev.totalChunks || 0);
+            } else if (ev.stage === "remuxing" || ev.stage === "saving") {
+              setGenStep(2);
+            } else if (ev.stage === "complete") {
+              const newUsed = sessionsUsed + 1;
+              localStorage.setItem("mt_sessions_used", String(newUsed));
+              setSessionsUsed(newUsed);
+              const audioUrl = ev.sessionId && !ev.audioUnavailable
+                ? `${BACKEND_URL}/sessions/${ev.sessionId}/audio?token=${encodeURIComponent(token)}`
+                : null;
+              console.log("[generate/sse] sessionId:", ev.sessionId, "audioUnavailable:", ev.audioUnavailable, "audioUrl set:", !!audioUrl);
+              setResult({ script: ev.script, audioUrl, audioUnavailable: ev.audioUnavailable || !ev.sessionId });
+              if (audioUrl) setAudioPulse(true);
+              setView("result");
+              if (newUsed === 1) setShowInstallBanner(true);
+              done = true;
+              break;
+            } else if (ev.stage === "error") {
+              throw new Error(ev.message || "Generation failed. Please try again.");
+            }
+          }
+        }
+
+        if (!done) throw new Error("Session generation was interrupted. Please try again.");
+        return;
+      }
+
+      // JSON fallback path (non-SSE response or non-ok status).
       const data = await response.json();
       if (data.script) {
-        // Increment usage counter
         const newUsed = sessionsUsed + 1;
         localStorage.setItem("mt_sessions_used", String(newUsed));
         setSessionsUsed(newUsed);
-        // Stream audio from the dedicated endpoint — avoids parsing a 5-10MB base64
-        // blob inside JSON which causes the result screen to show unavailable.
         const audioUrl = data.sessionId && !data.audioUnavailable
           ? `${BACKEND_URL}/sessions/${data.sessionId}/audio?token=${encodeURIComponent(token)}`
           : null;
@@ -1663,7 +1712,6 @@ useEffect(() => {
         setResult({ script: data.script, audioUrl, audioUnavailable: data.audioUnavailable || !data.sessionId });
         if (audioUrl) setAudioPulse(true);
         setView("result");
-        // Show install prompt after first session
         if (newUsed === 1) setShowInstallBanner(true);
         return;
       }
@@ -2218,31 +2266,39 @@ useEffect(() => {
             <PulseRing />
             <div style={S.genTitle}>Creating your session</div>
             <div style={S.genSub}>Personalizing for {form.name || "you"}</div>
-            <div style={{ marginTop: "2rem", textAlign: "left", display: "inline-block" }}>
+            <div style={{ marginTop: "2rem", textAlign: "left", display: "inline-block", width: "100%", maxWidth: 280 }}>
               {GEN_STEPS.map((label, i) => (
-                <div key={i} style={{
-                  display: "flex", alignItems: "center", gap: "0.75rem",
-                  marginBottom: "0.75rem",
-                  opacity: i <= genStep ? 1 : 0.25,
-                  transition: "opacity 0.5s ease",
-                }}>
-                  <div style={{
-                    width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    border: i < genStep ? "none" : "1.5px solid rgba(168,216,200,0.4)",
-                    background: i < genStep ? "#a8d8c8" : "transparent",
-                    fontSize: 11, color: "#07091a", transition: "all 0.4s ease",
-                  }}>
-                    {i < genStep ? "✓" : ""}
+                <div key={i} style={{ marginBottom: "0.9rem", opacity: i <= genStep ? 1 : 0.25, transition: "opacity 0.5s ease" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <div style={{
+                      width: 20, height: 20, borderRadius: "50%", flexShrink: 0,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      border: i < genStep ? "none" : "1.5px solid rgba(168,216,200,0.4)",
+                      background: i < genStep ? "#a8d8c8" : "transparent",
+                      fontSize: 11, color: "#07091a", transition: "all 0.4s ease",
+                    }}>
+                      {i < genStep ? "✓" : ""}
+                    </div>
+                    <span style={{
+                      fontSize: "0.9rem",
+                      color: i === genStep ? "#e8e6f0" : i < genStep ? "#a8d8c8" : "#8a879e",
+                      transition: "color 0.4s ease",
+                    }}>
+                      {label}
+                      {i === genStep && <span style={{ color: "#a8d8c8", marginLeft: 2 }}>●</span>}
+                    </span>
                   </div>
-                  <span style={{
-                    fontSize: "0.9rem",
-                    color: i === genStep ? "#e8e6f0" : i < genStep ? "#a8d8c8" : "#8a879e",
-                    transition: "color 0.4s ease",
-                  }}>
-                    {label}
-                    {i === genStep && <span style={{ color: "#a8d8c8", marginLeft: 2 }}>●</span>}
-                  </span>
+                  {i === 1 && genStep === 1 && sseTotalChunks > 0 && (
+                    <div style={{ marginLeft: 32, marginTop: 6 }}>
+                      <div style={{ height: 4, background: "rgba(168,216,200,0.15)", borderRadius: 2, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${Math.round((sseChunk / sseTotalChunks) * 100)}%`, background: "#a8d8c8", borderRadius: 2, transition: "width 0.4s ease" }} />
+                      </div>
+                      <div style={{ fontSize: "0.7rem", color: "#8a879e", marginTop: 3 }}>{sseChunk} of {sseTotalChunks} voice segments</div>
+                    </div>
+                  )}
+                  {i === genStep && sseMessage && (
+                    <div style={{ marginLeft: 32, marginTop: 4, fontSize: "0.72rem", color: "#8a879e" }}>{sseMessage}</div>
+                  )}
                 </div>
               ))}
             </div>
