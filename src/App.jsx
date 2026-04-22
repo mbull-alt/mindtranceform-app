@@ -759,11 +759,13 @@ function Logo({ sub = false, brand = null }) {
 }
 
 // Custom audio player with scrub bar and ±15 s skip controls.
-function SessionAudioPlayer({ src, className, onPlay, onPause, onError, noteText }) {
-  const ref = useRef(null);
-  const [currentTime, setCurrent] = useState(0);
-  const [duration, setDuration]   = useState(0);
-  const [playing, setPlaying]     = useState(false);
+function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
+  const ref            = useRef(null);
+  const scrubRef       = useRef(null);
+  const timeRef        = useRef(null);
+  const hasRestoredRef = useRef(false);
+  const durationRef    = useRef(0);
+  const [playing, setPlaying] = useState(false);
 
   function fmt(s) {
     if (!isFinite(s) || s < 0) return "0:00";
@@ -771,8 +773,22 @@ function SessionAudioPlayer({ src, className, onPlay, onPause, onError, noteText
   }
   function skip(delta) {
     const a = ref.current;
-    if (a) a.currentTime = Math.max(0, Math.min((a.currentTime || 0) + delta, a.duration || 0));
+    if (!a) return;
+    a.currentTime += delta;
   }
+
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    navigator.mediaSession.setActionHandler("seekforward",  () => { if (ref.current) ref.current.currentTime += 15; });
+    navigator.mediaSession.setActionHandler("seekbackward", () => { if (ref.current) ref.current.currentTime -= 15; });
+    navigator.mediaSession.setActionHandler("seekto", (d) => { if (ref.current && d.seekTime != null) ref.current.currentTime = d.seekTime; });
+    return () => {
+      navigator.mediaSession.setActionHandler("seekforward",  null);
+      navigator.mediaSession.setActionHandler("seekbackward", null);
+      navigator.mediaSession.setActionHandler("seekto", null);
+    };
+  }, []);
+
   const ring = { background: "rgba(168,216,200,0.08)", border: "0.5px solid rgba(168,216,200,0.25)", borderRadius: 8, color: "#a8d8c8", cursor: "pointer", fontSize: "0.82rem", padding: "0.45rem 0.75rem", lineHeight: 1 };
 
   return (
@@ -780,13 +796,28 @@ function SessionAudioPlayer({ src, className, onPlay, onPause, onError, noteText
       <audio
         ref={ref}
         src={src}
-        className={className}
+        playsInline
+        preload="auto"
         style={{ display: "none" }}
-        onTimeUpdate={() => setCurrent(ref.current?.currentTime || 0)}
-        onLoadedMetadata={() => setDuration(ref.current?.duration || 0)}
+        onTimeUpdate={() => {
+          const t = ref.current?.currentTime || 0;
+          if (scrubRef.current) scrubRef.current.value = t;
+          if (timeRef.current) timeRef.current.textContent = fmt(t);
+          if (t > 0) localStorage.setItem("mt_audio_position", t);
+        }}
+        onLoadedMetadata={() => {
+          durationRef.current = ref.current?.duration || 0;
+          if (scrubRef.current) scrubRef.current.max = durationRef.current;
+          if (durationRef.current > 0) setPlaying(p => p);
+          if (!hasRestoredRef.current) {
+            hasRestoredRef.current = true;
+            const saved = parseFloat(localStorage.getItem("mt_audio_position") || "0");
+            if (saved > 5 && ref.current) ref.current.currentTime = saved;
+          }
+        }}
         onPlay={() => { setPlaying(true); onPlay?.(); }}
         onPause={() => { setPlaying(false); onPause?.(); }}
-        onEnded={() => setPlaying(false)}
+        onEnded={() => { setPlaying(false); localStorage.removeItem("mt_audio_position"); }}
         onError={onError}
       />
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
@@ -798,13 +829,14 @@ function SessionAudioPlayer({ src, className, onPlay, onPause, onError, noteText
         <button style={ring} onClick={() => skip(15)} title="Forward 15 seconds">15s ↻</button>
       </div>
       <input
-        type="range" min={0} max={duration || 0} step={0.5} value={currentTime}
+        ref={scrubRef}
+        type="range" min={0} max={durationRef.current || 0} step={0.5} defaultValue={0}
         onChange={e => { if (ref.current) ref.current.currentTime = parseFloat(e.target.value); }}
         style={{ width: "100%", accentColor: "#a8d8c8", cursor: "pointer", marginBottom: "0.25rem" }}
       />
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "#8a879e" }}>
-        <span>{fmt(currentTime)}</span>
-        <span>{duration > 0 ? fmt(duration) : "--:--"}</span>
+        <span ref={timeRef}>0:00</span>
+        <span>{durationRef.current > 0 ? fmt(durationRef.current) : "--:--"}</span>
       </div>
       {noteText && <div style={{ fontSize: "0.73rem", color: "#8a879e", textAlign: "center", marginTop: "0.35rem" }}>{noteText}</div>}
     </div>
@@ -877,6 +909,7 @@ export default function MindTranceformApp() {
   const [selectedSession, setSelectedSession]           = useState(null);
   const [sessionDetailLoading, setSessionDetailLoading] = useState(false);
   const [sessionDetailError, setSessionDetailError]     = useState("");
+  const [deleteConfirmId, setDeleteConfirmId]           = useState(null);
 
   // Account / subscription
   const [welcomeMsg, setWelcomeMsg]       = useState("");
@@ -1012,7 +1045,48 @@ export default function MindTranceformApp() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", saveSessionState);
     };
-  }, []); // register once; sessionStateRef always holds fresh values
+  }, []); // Restore view when user returns to the app from lock screen (already logged in).
+// The auth-callback restore only runs on cold start; this handles warm resume.
+useEffect(() => {
+  if (!authReady) return;
+  const RESTORE_TTL_MS = 30 * 60 * 1000;
+
+  function tryRestore() {
+    try {
+      const raw = localStorage.getItem("mt_session_state");
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (!saved.savedAt || Date.now() - saved.savedAt >= RESTORE_TTL_MS) {
+        localStorage.removeItem("mt_session_state");
+        return;
+      }
+      const restorable = new Set(["sessionDetail", "result"]);
+      if (!restorable.has(saved.view)) return;
+
+      // If we're already on the correct view with a session loaded, skip the restore —
+      // this prevents the scrubber's visibilitychange from reloading the audio src.
+      const current = sessionStateRef.current;
+      if (current.view === saved.view && (current.result || current.selectedSession)) return;
+
+      localStorage.removeItem("mt_session_state");
+      if (saved.result)          setResult(saved.result);
+      if (saved.selectedSession) setSelectedSession(saved.selectedSession);
+      if (saved.form)            setForm(saved.form);
+      setView(saved.view);
+    } catch {}
+  }
+
+  // Run immediately when authReady fires — catches tablet/phone login-to-unlock
+  // where auth event fires after visibilitychange, resetting view to home first.
+  tryRestore();
+
+  function onVisibilityChange() {
+    if (document.visibilityState === "visible") tryRestore();
+  }
+
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+}, [authReady]); // authReady only — removing view prevents stale closure capturing wrong view
 
   // Register MediaSession metadata so the OS shows lock-screen audio controls and
   // keeps playback alive when the screen locks (consistent with other meditation apps).
@@ -1167,7 +1241,26 @@ export default function MindTranceformApp() {
         if (currentPath === "/admin/content" && u?.email === adminEmail) {
           setView("adminContent");
         } else {
-          setView("home");
+          // Before resetting to home, check if there's a session to restore
+          // (e.g. user unlocked tablet and Supabase re-fired SIGNED_IN).
+          const RESTORE_TTL_MS = 30 * 60 * 1000;
+          let restored = false;
+          try {
+            const raw = localStorage.getItem("mt_session_state");
+            if (raw) {
+              const saved = JSON.parse(raw);
+              const restorable = new Set(["sessionDetail", "result"]);
+              if (saved.savedAt && Date.now() - saved.savedAt < RESTORE_TTL_MS && restorable.has(saved.view)) {
+                localStorage.removeItem("mt_session_state");
+                if (saved.result)          setResult(saved.result);
+                if (saved.selectedSession) setSelectedSession(saved.selectedSession);
+                if (saved.form)            setForm(saved.form);
+                setView(saved.view);
+                restored = true;
+              }
+            }
+          } catch {}
+          if (!restored) setView("home");
         }
       } else if (event === "SIGNED_OUT") {
         setView("landing");
@@ -1359,6 +1452,21 @@ export default function MindTranceformApp() {
     } finally {
       setSessionDetailLoading(false);
     }
+  }
+
+  async function deleteSession(id) {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/sessions/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) setSessions(prev => prev.filter(s => s.id !== id));
+    } catch (e) {
+      console.error("[deleteSession] Error:", e.message);
+    }
+    setDeleteConfirmId(null);
   }
 
   async function fetchSubStatus() {
@@ -2153,7 +2261,6 @@ export default function MindTranceformApp() {
             {result.audioUrl
               ? <SessionAudioPlayer
                   src={result.audioUrl}
-                  className={audioPulse ? "audio-pulse" : undefined}
                   noteText="Your personalized audio session"
                   onPlay={() => {
                     setAudioPulse(false);
@@ -2461,9 +2568,27 @@ export default function MindTranceformApp() {
             <div style={{ color: "#8a879e", textAlign: "center", padding: "2rem 0" }}>No sessions yet. Generate your first one!</div>
           )}
           {sessions.map((s) => (
-            <div key={s.id} style={{ ...S.sessionItem, opacity: sessionDetailLoading ? 0.5 : 1, pointerEvents: sessionDetailLoading ? "none" : "auto" }} onClick={() => openSession(s.id)}>
-              <div style={{ fontSize: "0.92rem", color: "#e8e6f0" }}>{s.title}</div>
-              <div style={{ fontSize: "0.75rem", color: "#8a879e", marginTop: 3 }}>{s.program} · {s.voice}</div>
+            <div key={s.id} style={{ ...S.sessionItem, opacity: sessionDetailLoading ? 0.5 : 1, pointerEvents: sessionDetailLoading ? "none" : "auto" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", cursor: "pointer" }} onClick={() => openSession(s.id)}>
+                <div>
+                  <div style={{ fontSize: "0.92rem", color: "#e8e6f0" }}>{s.title}</div>
+                  <div style={{ fontSize: "0.75rem", color: "#8a879e", marginTop: 3 }}>{s.program} · {s.voice}</div>
+                </div>
+                <button
+                  style={{ background: "none", border: "none", color: "#8a879e", cursor: "pointer", fontSize: "0.85rem", padding: "0 0 0 0.75rem", lineHeight: 1, flexShrink: 0 }}
+                  onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(s.id); }}
+                  title="Delete session"
+                >✕</button>
+              </div>
+              {deleteConfirmId === s.id && (
+                <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "0.5px solid rgba(255,255,255,0.08)" }} onClick={(e) => e.stopPropagation()}>
+                  <div style={{ fontSize: "0.82rem", color: "#e8e6f0", marginBottom: "0.6rem" }}>Are you sure? This cannot be undone.</div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button style={{ ...S.btn, flex: 1, padding: "0.4rem", fontSize: "0.82rem", background: "rgba(232,135,100,0.12)", borderColor: "rgba(232,135,100,0.4)", color: "#e88764" }} onClick={() => deleteSession(s.id)}>Delete</button>
+                    <button style={{ ...S.btn, flex: 1, padding: "0.4rem", fontSize: "0.82rem" }} onClick={() => setDeleteConfirmId(null)}>Cancel</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
