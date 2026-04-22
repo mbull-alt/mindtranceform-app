@@ -765,7 +765,17 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
   const timeRef        = useRef(null);
   const hasRestoredRef = useRef(false);
   const durationRef    = useRef(0);
+  const scrubbingRef   = useRef(false);
+  // Store src in a ref and set it imperatively so React re-renders never touch the audio src.
+  const srcRef         = useRef(null);
   const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    if (src && src !== srcRef.current) {
+      srcRef.current = src;
+      if (ref.current) ref.current.src = src;
+    }
+  }, [src]);
 
   function fmt(s) {
     if (!isFinite(s) || s < 0) return "0:00";
@@ -775,6 +785,10 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
     const a = ref.current;
     if (!a) return;
     a.currentTime += delta;
+  }
+  function commitScrub(val) {
+    if (ref.current) ref.current.currentTime = val;
+    scrubbingRef.current = false;
   }
 
   useEffect(() => {
@@ -795,20 +809,18 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
     <div style={{ marginBottom: "1.25rem" }}>
       <audio
         ref={ref}
-        src={src}
         playsInline
         preload="auto"
         style={{ display: "none" }}
         onTimeUpdate={() => {
           const t = ref.current?.currentTime || 0;
-          if (scrubRef.current) scrubRef.current.value = t;
+          if (!scrubbingRef.current && scrubRef.current) scrubRef.current.value = t;
           if (timeRef.current) timeRef.current.textContent = fmt(t);
           if (t > 0) localStorage.setItem("mt_audio_position", t);
         }}
         onLoadedMetadata={() => {
           durationRef.current = ref.current?.duration || 0;
           if (scrubRef.current) scrubRef.current.max = durationRef.current;
-          if (durationRef.current > 0) setPlaying(p => p);
           if (!hasRestoredRef.current) {
             hasRestoredRef.current = true;
             const saved = parseFloat(localStorage.getItem("mt_audio_position") || "0");
@@ -831,7 +843,12 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
       <input
         ref={scrubRef}
         type="range" min={0} max={durationRef.current || 0} step={0.5} defaultValue={0}
-        onChange={e => { if (ref.current) ref.current.currentTime = parseFloat(e.target.value); }}
+        onChange={e => {
+          scrubbingRef.current = true;
+          if (timeRef.current) timeRef.current.textContent = fmt(parseFloat(e.target.value));
+        }}
+        onMouseUp={e => commitScrub(parseFloat(e.target.value))}
+        onTouchEnd={e => commitScrub(parseFloat(e.target.value))}
         style={{ width: "100%", accentColor: "#a8d8c8", cursor: "pointer", marginBottom: "0.25rem" }}
       />
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "#8a879e" }}>
