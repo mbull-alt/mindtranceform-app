@@ -769,6 +769,7 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
   // Store src in a ref and set it imperatively so React re-renders never touch the audio src.
   const srcRef         = useRef(null);
   const [playing, setPlaying] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1.0);
 
   useEffect(() => {
     if (src && src !== srcRef.current) {
@@ -776,6 +777,12 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
       if (ref.current) ref.current.src = src;
     }
   }, [src]);
+
+  // Mount/unmount diagnostic — confirms the audio element is stable during interaction.
+  useEffect(() => {
+    console.log("[AUDIO MOUNT] element created, src=", ref.current?.src || "(not yet set)");
+    return () => console.log("[AUDIO UNMOUNT]");
+  }, []);
 
   function fmt(s) {
     if (!isFinite(s) || s < 0) return "0:00";
@@ -854,6 +861,19 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "#8a879e" }}>
         <span ref={timeRef}>0:00</span>
         <span>{durationRef.current > 0 ? fmt(durationRef.current) : "--:--"}</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}>
+        <span style={{ fontSize: "0.72rem", color: "#8a879e", whiteSpace: "nowrap" }}>Speed</span>
+        {[0.75, 0.85, 1.0, 1.15, 1.25].map(r => (
+          <button
+            key={r}
+            style={{ ...ring, padding: "0.25rem 0.5rem", fontSize: "0.72rem", background: playbackRate === r ? "rgba(168,216,200,0.22)" : "rgba(168,216,200,0.04)", borderColor: playbackRate === r ? "rgba(168,216,200,0.6)" : "rgba(168,216,200,0.2)" }}
+            onClick={() => {
+              setPlaybackRate(r);
+              if (ref.current) ref.current.playbackRate = r;
+            }}
+          >{r === 1.0 ? "1×" : `${r}×`}</button>
+        ))}
       </div>
       {noteText && <div style={{ fontSize: "0.73rem", color: "#8a879e", textAlign: "center", marginTop: "0.35rem" }}>{noteText}</div>}
     </div>
