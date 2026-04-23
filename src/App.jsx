@@ -1717,7 +1717,10 @@ useEffect(() => {
       }
       throw new Error(typeof data.error === "string" ? data.error : "Generation failed. Please try again.");
     } catch (e) {
-      setError(e.message || "Something went wrong. Please try again.");
+      const isNetwork = e instanceof TypeError && e.message.toLowerCase().includes("fetch");
+      setError(isNetwork
+        ? "Could not reach the server. Check your connection and try again."
+        : (e.message || "Something went wrong. Please try again."));
       setView("genError");
     } finally {
       setGenerating(false);
@@ -2946,10 +2949,13 @@ useEffect(() => {
         <div style={S.card}>
           <div style={{ textAlign: "center", padding: "1rem 0" }}>
             <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "0.75rem" }}>Something went wrong</div>
-            <div style={{ fontSize: "0.85rem", color: "#8a879e", lineHeight: 1.7, marginBottom: "2rem" }}>{error}</div>
+            <div style={{ fontSize: "0.85rem", color: "#8a879e", lineHeight: 1.7, marginBottom: "1.5rem" }}>{error}</div>
             <div style={S.row}>
               <button style={S.btn} onClick={() => setView("home")}>Home</button>
               <button style={S.btnPrimary} onClick={generate}>Try Again ✦</button>
+            </div>
+            <div style={{ marginTop: "1rem", fontSize: "0.78rem", color: "#8a879e" }}>
+              If this keeps happening, <a href="mailto:support@mindtranceformapp.com" style={{ color: "#a8d8c8", textDecoration: "none" }}>contact support</a>.
             </div>
           </div>
         </div>
