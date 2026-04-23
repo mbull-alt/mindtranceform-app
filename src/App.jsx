@@ -360,8 +360,27 @@ const TERMS_TEXT = [
   { p: "support@mindtranceform.com" },
 ];
 
+const DISCLAIMER_TEXT = [
+  { h: "CLINICAL DISCLAIMER" },
+  { sub: "Please read before use" },
+  { p: "Mind Tranceform is designed for relaxation, personal development, and general wellness purposes only. It is not a medical device, psychological treatment, or therapeutic service, and is not intended to diagnose, treat, cure, or prevent any condition." },
+  { h2: "Not a Substitute for Professional Care" },
+  { p: "Mind Tranceform is not a substitute for professional mental health care, medical treatment, or psychological therapy. If you are experiencing a mental health crisis, suicidal thoughts, or severe emotional distress, please contact a qualified professional immediately." },
+  { p: "US Crisis Line: call or text 988 (Suicide & Crisis Lifeline), available 24/7." },
+  { h2: "Contraindications" },
+  { p: "Consult a licensed healthcare provider before use if you have or suspect you may have epilepsy or seizure disorders, psychosis or schizophrenia, dissociative identity disorder, severe depression or suicidal ideation, or any other serious psychiatric condition. Do not use during pregnancy without consulting your doctor." },
+  { h2: "Driving & Machinery" },
+  { p: "Never listen while driving, operating machinery, caring for dependents, or in any situation requiring full alertness. The sessions are intended for use while safely seated or lying down with eyes closed." },
+  { h2: "User Assumption of Risk" },
+  { p: "By using Mind Tranceform, you acknowledge that you have read and understood this disclaimer and that you use the service at your own risk. Mind Tranceform LLC is not liable for any decisions made based on session content." },
+  { h2: "Children" },
+  { p: "Mind Tranceform is not intended for users under 18 years of age." },
+  { h2: "Questions?" },
+  { p: "support@mindtranceformapp.com" },
+];
+
 function LegalModal({ type, onClose }) {
-  const blocks = type === "privacy" ? PRIVACY_TEXT : TERMS_TEXT;
+  const blocks = type === "privacy" ? PRIVACY_TEXT : type === "disclaimer" ? DISCLAIMER_TEXT : TERMS_TEXT;
   return (
     <div
       onClick={onClose}
@@ -408,6 +427,7 @@ function Footer({ onOpenModal, onHowToUse }) {
     <div style={{ textAlign: "center", padding: "1.75rem 0 0.5rem" }}>
       <button style={linkStyle} onClick={() => onOpenModal("privacy")}>Privacy Policy</button>
       <button style={linkStyle} onClick={() => onOpenModal("terms")}>Terms of Service</button>
+      <button style={linkStyle} onClick={() => onOpenModal("disclaimer")}>Clinical Disclaimer</button>
       {onHowToUse && <button style={linkStyle} onClick={onHowToUse}>How to use</button>}
     </div>
   );
@@ -990,8 +1010,6 @@ export default function MindTranceformApp() {
   const [ratingMsg, setRatingMsg]           = useState("");
   const [ratedSessionId, setRatedSessionId] = useState(null);
 
-  // Testimonials for landing screen
-  const [testimonials, setTestimonials] = useState([]);
 
   // Legal modals
   const [legalModal, setLegalModal] = useState(null); // null | "privacy" | "terms"
@@ -1047,8 +1065,6 @@ export default function MindTranceformApp() {
     if (!generating) { setGenStep(0); setSseChunk(0); setSseTotalChunks(0); setSseMessage(""); }
   }, [generating]);
 
-  // Fetch public testimonials on first load
-  useEffect(() => { fetchTestimonials(); }, []);
 
   // Auto-load WL admin data when navigating to that view
   useEffect(() => {
@@ -1307,9 +1323,11 @@ useEffect(() => {
         if (u.email) localStorage.setItem("mt_user_email", u.email);
         // Only register / sync plan on actual sign-in — not token refreshes
         if (u.email && event === "SIGNED_IN") {
+          const termsAcceptedAt = localStorage.getItem("mt_terms_accepted_at");
           fetch(`${BACKEND_URL}/user/register`, {
             method: "POST",
-            headers: { Authorization: `Bearer ${session.access_token}` },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ terms_accepted_at: termsAcceptedAt || null }),
           }).catch(() => {});
           fetchAndSetPlan(session.access_token, u.email);
         }
@@ -1358,6 +1376,8 @@ useEffect(() => {
       error = signUpErr;
       if (!error) {
         setSignupConfirmSent(true);
+        // Record terms acceptance timestamp for audit trail
+        localStorage.setItem("mt_terms_accepted_at", new Date().toISOString());
         // Track referral if present
         const refCode = localStorage.getItem("mt_referral_code");
         if (refCode && signUpData?.session?.access_token) {
@@ -1823,15 +1843,6 @@ useEffect(() => {
     } catch {}
   }
 
-  // ── TESTIMONIAL FUNCTIONS ─────────────────────────────────────────────────
-  async function fetchTestimonials() {
-    try {
-      const res = await fetch(`${BACKEND_URL}/testimonials`);
-      const data = await res.json();
-      if (data.success && data.testimonials.length > 0) setTestimonials(data.testimonials);
-    } catch {}
-  }
-
   async function fetchBlogPosts() {
     setBlogLoading(true);
     try {
@@ -1912,21 +1923,8 @@ useEffect(() => {
     setBlogAdminPosts(prev => prev.map(p => p.id === id ? { ...p, status: "published" } : p));
   }
 
-  async function submitRating() {
+  function submitRating() {
     if (!ratingVal) return;
-    try {
-      const token = await getToken();
-      await fetch(`${BACKEND_URL}/testimonial`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          user_name: form.name || "Anonymous",
-          program:   form.program || null,
-          rating:    ratingVal,
-          message:   ratingMsg || null,
-        }),
-      });
-    } catch {}
     setRatingState("done");
     clearTimeout(ratingTimerRef.current);
   }
@@ -1962,7 +1960,7 @@ useEffect(() => {
       { user_name: "James",   program: "Stress & Anxiety", rating: 5, message: "I've tried every meditation app. This is the first one that actually feels personal." },
       { user_name: "Maria",   program: "Sleep",            rating: 5, message: "I listen every night before bed. My sleep has completely changed in 3 weeks." },
     ];
-    const reviews = testimonials.length > 0 ? testimonials.slice(0, 3) : PLACEHOLDERS;
+    const reviews = PLACEHOLDERS;
     const lbl = (text) => (
       <div style={{ fontSize: "0.65rem", letterSpacing: "0.28em", textTransform: "uppercase", color: "#8a879e", marginBottom: "1.25rem", marginTop: "0.25rem" }}>{text}</div>
     );
@@ -2179,9 +2177,12 @@ useEffect(() => {
                       I agree to the{" "}
                       <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
                         onClick={(e) => { e.stopPropagation(); setLegalModal("terms"); }}>Terms of Service</span>
-                      {" "}and{" "}
+                      {", "}
                       <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
                         onClick={(e) => { e.stopPropagation(); setLegalModal("privacy"); }}>Privacy Policy</span>
+                      {", and "}
+                      <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
+                        onClick={(e) => { e.stopPropagation(); setLegalModal("disclaimer"); }}>Clinical Disclaimer</span>
                     </span>
                   </div>
                 )}
@@ -2600,6 +2601,10 @@ useEffect(() => {
             <div style={{ ...S.infoBox, marginBottom: "1.5rem" }}>
               <div style={{ fontSize: "0.7rem", letterSpacing: "0.2em", textTransform: "uppercase", color: "#8a879e", marginBottom: "0.5rem" }}>Important notice</div>
               Mind Tranceform is designed for relaxation, personal development, and wellness purposes only. It is not medical, psychological, or therapeutic treatment and is not a substitute for professional care. If you have a medical or mental health condition, consult your doctor before use. Do not use as a replacement for prescribed treatment or medication.
+              <div style={{ marginTop: "0.75rem", fontSize: "0.82rem", color: "#8a879e" }}>
+                If you are struggling with your mental health, please reach out to a qualified professional.{" "}
+                <span style={{ color: "#a8d8c8" }}>US Crisis Line: call or text <strong>988</strong></span> (Suicide &amp; Crisis Lifeline), available 24/7.
+              </div>
             </div>
 
             {/* Checkbox */}
