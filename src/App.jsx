@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { TermsPage } from "./TermsPage.jsx";
+import { PrivacyPage } from "./PrivacyPage.jsx";
+import { CookiesPage } from "./CookiesPage.jsx";
 
 const BACKEND_URL = "https://mindtranceform-backend.onrender.com";
 const supabase = createClient(
@@ -421,14 +424,22 @@ function LegalModal({ type, onClose }) {
   );
 }
 
-function Footer({ onOpenModal, onHowToUse }) {
-  const linkStyle = { background: "none", border: "none", color: "#8a879e", fontSize: "0.68rem", cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", letterSpacing: "0.05em", opacity: 0.7, margin: "0 0.75rem" };
+function Footer({ onOpenModal, onHowToUse, onNav }) {
+  const linkStyle = { background: "none", border: "none", color: "#8a879e", fontSize: "0.68rem", cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", letterSpacing: "0.05em", opacity: 0.7, margin: "0 0.5rem" };
+  const emailStyle = { color: "#8a879e", fontSize: "0.68rem", textDecoration: "underline", letterSpacing: "0.05em", opacity: 0.7, margin: "0 0.5rem" };
+  const nav = (page) => onNav ? onNav(page) : onOpenModal(page);
   return (
     <div style={{ textAlign: "center", padding: "1.75rem 0 0.5rem" }}>
-      <button style={linkStyle} onClick={() => onOpenModal("privacy")}>Privacy Policy</button>
-      <button style={linkStyle} onClick={() => onOpenModal("terms")}>Terms of Service</button>
+      <a href="mailto:support@mindtranceformapp.com" style={emailStyle}>support@mindtranceformapp.com</a>
+      <span style={{ color: "#8a879e", opacity: 0.4, fontSize: "0.68rem" }}>·</span>
+      <button style={linkStyle} onClick={() => nav("terms")}>Terms</button>
+      <span style={{ color: "#8a879e", opacity: 0.4, fontSize: "0.68rem" }}>·</span>
+      <button style={linkStyle} onClick={() => nav("privacy")}>Privacy</button>
+      <span style={{ color: "#8a879e", opacity: 0.4, fontSize: "0.68rem" }}>·</span>
+      <button style={linkStyle} onClick={() => nav("cookies")}>Cookies</button>
+      <span style={{ color: "#8a879e", opacity: 0.4, fontSize: "0.68rem" }}>·</span>
       <button style={linkStyle} onClick={() => onOpenModal("disclaimer")}>Clinical Disclaimer</button>
-      {onHowToUse && <button style={linkStyle} onClick={onHowToUse}>How to use</button>}
+      {onHowToUse && <><span style={{ color: "#8a879e", opacity: 0.4, fontSize: "0.68rem" }}>·</span><button style={linkStyle} onClick={onHowToUse}>How to use</button></>}
     </div>
   );
 }
@@ -939,6 +950,7 @@ export default function MindTranceformApp() {
   const [form, setForm]     = useState(EMPTY_FORM);
   const [error, setError]   = useState("");
   const [generating, setGenerating] = useState(false);
+  const [topicBlocked, setTopicBlocked] = useState(false);
   const [result, setResult] = useState(null);
   const [genStep, setGenStep] = useState(0);
   const [sseChunk, setSseChunk] = useState(0);
@@ -1014,6 +1026,12 @@ export default function MindTranceformApp() {
   // Legal modals
   const [legalModal, setLegalModal] = useState(null); // null | "privacy" | "terms"
   const [termsChecked, setTermsChecked] = useState(false);
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
+
+  // Delete account
+  const [deleteAcctConfirm, setDeleteAcctConfirm] = useState(false);
+  const [deleteAcctBusy, setDeleteAcctBusy]       = useState(false);
+  const [deleteAcctError, setDeleteAcctError]     = useState("");
 
   // PWA install prompt
   const [deferredInstall, setDeferredInstall] = useState(null);
@@ -1034,6 +1052,9 @@ export default function MindTranceformApp() {
   const [blogAdminPosts, setBlogAdminPosts]   = useState([]);
   const [contentCopied, setContentCopied]    = useState(null);
 
+  // Public testimonials
+  const [testimonials, setTestimonials] = useState([]);
+
   // Admin flag — owner account always gets full pro access
   const isAdmin = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
 
@@ -1046,6 +1067,9 @@ export default function MindTranceformApp() {
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
+
+  // Fetch public testimonials on first load
+  useEffect(() => { fetchTestimonials(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Inject keyframe animations
   useEffect(() => {
@@ -1214,6 +1238,15 @@ useEffect(() => {
       setBlogPost({ slug, loading: true });
       setView("blogPost");
       setAuthReady(true);
+    } else if (path === "/terms") {
+      setView("terms");
+      setAuthReady(true);
+    } else if (path === "/privacy") {
+      setView("privacy");
+      setAuthReady(true);
+    } else if (path === "/cookies") {
+      setView("cookies");
+      setAuthReady(true);
     }
 
     // Handle Stripe success redirect
@@ -1376,8 +1409,9 @@ useEffect(() => {
       error = signUpErr;
       if (!error) {
         setSignupConfirmSent(true);
-        // Record terms acceptance timestamp for audit trail
+        // Record terms and age acceptance timestamps for audit trail
         localStorage.setItem("mt_terms_accepted_at", new Date().toISOString());
+        localStorage.setItem("mt_age_confirmed_at", new Date().toISOString());
         // Track referral if present
         const refCode = localStorage.getItem("mt_referral_code");
         if (refCode && signUpData?.session?.access_token) {
@@ -1419,6 +1453,27 @@ useEffect(() => {
     const { error } = await supabase.auth.signInAnonymously();
     if (error) setAuthError("Guest access unavailable — please create a free account.");
     setAuthBusy(false);
+  }
+
+  async function handleDeleteAccount() {
+    setDeleteAcctBusy(true);
+    setDeleteAcctError("");
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/account`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Deletion failed");
+    } catch (err) {
+      setDeleteAcctError(err.message || "Something went wrong. Email support@mindtranceformapp.com.");
+      setDeleteAcctBusy(false);
+      return;
+    }
+    await supabase.auth.signOut();
+    ["mt_plan","mt_sessions_used","mt_safety_accepted","mt_terms_accepted_at","mt_age_confirmed_at","mt_session_state","mt_referral_code"].forEach(k => localStorage.removeItem(k));
+    setView("landing");
   }
 
   async function handleLogout() {
@@ -1710,6 +1765,7 @@ useEffect(() => {
               done = true;
               break;
             } else if (ev.stage === "error") {
+              if (ev.error === "topic_blocked") { setTopicBlocked(true); done = true; break; }
               throw new Error(ev.message || "Generation failed. Please try again.");
             }
           }
@@ -1735,6 +1791,7 @@ useEffect(() => {
         if (newUsed === 1) setShowInstallBanner(true);
         return;
       }
+      if (data.error === "topic_blocked") { setTopicBlocked(true); return; }
       throw new Error(typeof data.error === "string" ? data.error : "Generation failed. Please try again.");
     } catch (e) {
       const isNetwork = e instanceof TypeError && e.message.toLowerCase().includes("fetch");
@@ -1825,6 +1882,15 @@ useEffect(() => {
       }
     } catch { setWlAdminMsg("Save failed."); }
     setWlAdminBusy(false);
+  }
+
+  // ── TESTIMONIAL FUNCTIONS ─────────────────────────────────────────────────
+  async function fetchTestimonials() {
+    try {
+      const res = await fetch(`${BACKEND_URL}/testimonials`);
+      const data = await res.json();
+      if (data.success && data.testimonials.length > 0) setTestimonials(data.testimonials);
+    } catch {}
   }
 
   // ── REFERRAL FUNCTIONS ────────────────────────────────────────────────────
@@ -1932,7 +1998,53 @@ useEffect(() => {
   if (!authReady) return null;
 
   const modal = legalModal ? <LegalModal type={legalModal} onClose={() => setLegalModal(null)} /> : null;
-  const footer = <Footer onOpenModal={setLegalModal} onHowToUse={() => { setSafetyReturn("home"); setView("safety"); }} />;
+  const footer = <Footer onOpenModal={setLegalModal} onNav={setView} onHowToUse={() => { setSafetyReturn("home"); setView("safety"); }} />;
+
+  const topicBlockedModal = topicBlocked ? (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}
+      onClick={() => { setTopicBlocked(false); setView("home"); }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ background: "#0d1030", border: "0.5px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "2rem 1.75rem", maxWidth: 480, width: "100%" }}
+      >
+        <div style={{ fontSize: "1.1rem", fontWeight: 300, color: "#e8e6f0", marginBottom: "0.75rem", letterSpacing: "0.04em" }}>
+          This topic is outside our scope
+        </div>
+        <div style={{ fontSize: "0.87rem", color: "#a8a5b8", lineHeight: 1.75, marginBottom: "0.5rem" }}>
+          Mind Tranceform focuses on relaxation, personal growth, and general wellness. For the topic you entered, we'd recommend speaking with a licensed therapist or counselor who can provide the right level of support.
+        </div>
+        <div style={{ fontSize: "0.87rem", color: "#a8a5b8", lineHeight: 1.75, marginBottom: "1.75rem" }}>
+          You're welcome to try a different focus — things like sleep, stress relief, confidence, or abundance work beautifully here.
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
+          <button
+            style={{ ...S.btnPrimary, width: "100%" }}
+            onClick={() => { setTopicBlocked(false); setView("home"); setStep(0); }}
+          >
+            Try a different topic ✦
+          </button>
+          <a
+            href="https://www.psychologytoday.com/us/therapists"
+            target="_blank"
+            rel="noreferrer"
+            style={{ ...S.btn, display: "block", textAlign: "center", textDecoration: "none", width: "100%", boxSizing: "border-box" }}
+          >
+            Find a therapist (Psychology Today)
+          </a>
+        </div>
+        <div style={{ marginTop: "1.25rem", fontSize: "0.76rem", color: "#8a879e", textAlign: "center" }}>
+          Need help? <a href="mailto:support@mindtranceformapp.com" style={{ color: "#a8d8c8", textDecoration: "underline" }}>support@mindtranceformapp.com</a>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  // ── LEGAL PAGES ──
+  if (view === "terms")   return <TermsPage   onBack={() => window.history.length > 1 ? window.history.back() : setView("landing")} />;
+  if (view === "privacy") return <PrivacyPage onBack={() => window.history.length > 1 ? window.history.back() : setView("landing")} />;
+  if (view === "cookies") return <CookiesPage onBack={() => window.history.length > 1 ? window.history.back() : setView("landing")} />;
 
   // ── LANDING ──
   if (view === "landing") {
@@ -2160,36 +2272,55 @@ useEffect(() => {
                   </div>
                 )}
                 {authMode === "signup" && (
-                  <div
-                    style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "1.25rem" }}
-                    onClick={() => setTermsChecked((v) => !v)}
-                  >
-                    <div style={{
-                      width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
-                      border: termsChecked ? "none" : "1.5px solid rgba(168,216,200,0.4)",
-                      background: termsChecked ? "#a8d8c8" : "transparent",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 11, color: "#07091a", transition: "all 0.2s",
-                    }}>
-                      {termsChecked ? "✓" : ""}
+                  <>
+                    <div
+                      style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "0.85rem" }}
+                      onClick={() => setTermsChecked((v) => !v)}
+                    >
+                      <div style={{
+                        width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
+                        border: termsChecked ? "none" : "1.5px solid rgba(168,216,200,0.4)",
+                        background: termsChecked ? "#a8d8c8" : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 11, color: "#07091a", transition: "all 0.2s",
+                      }}>
+                        {termsChecked ? "✓" : ""}
+                      </div>
+                      <span style={{ fontSize: "0.8rem", color: "#8a879e", lineHeight: 1.55 }}>
+                        I agree to the{" "}
+                        <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
+                          onClick={(e) => { e.stopPropagation(); setLegalModal("terms"); }}>Terms of Service</span>
+                        {", "}
+                        <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
+                          onClick={(e) => { e.stopPropagation(); setLegalModal("privacy"); }}>Privacy Policy</span>
+                        {", and "}
+                        <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
+                          onClick={(e) => { e.stopPropagation(); setLegalModal("disclaimer"); }}>Clinical Disclaimer</span>
+                      </span>
                     </div>
-                    <span style={{ fontSize: "0.8rem", color: "#8a879e", lineHeight: 1.55 }}>
-                      I agree to the{" "}
-                      <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
-                        onClick={(e) => { e.stopPropagation(); setLegalModal("terms"); }}>Terms of Service</span>
-                      {", "}
-                      <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
-                        onClick={(e) => { e.stopPropagation(); setLegalModal("privacy"); }}>Privacy Policy</span>
-                      {", and "}
-                      <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
-                        onClick={(e) => { e.stopPropagation(); setLegalModal("disclaimer"); }}>Clinical Disclaimer</span>
-                    </span>
-                  </div>
+                    <div
+                      style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "1.25rem" }}
+                      onClick={() => setAgeConfirmed((v) => !v)}
+                    >
+                      <div style={{
+                        width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
+                        border: ageConfirmed ? "none" : "1.5px solid rgba(168,216,200,0.4)",
+                        background: ageConfirmed ? "#a8d8c8" : "transparent",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 11, color: "#07091a", transition: "all 0.2s",
+                      }}>
+                        {ageConfirmed ? "✓" : ""}
+                      </div>
+                      <span style={{ fontSize: "0.8rem", color: "#8a879e", lineHeight: 1.55 }}>
+                        I confirm I am <strong style={{ color: "#e8e6f0" }}>18 years of age or older</strong>
+                      </span>
+                    </div>
+                  </>
                 )}
                 <button
-                  style={{ ...S.btnPrimary, width: "100%", opacity: authMode === "signup" && !termsChecked ? 0.4 : 1, cursor: authMode === "signup" && !termsChecked ? "not-allowed" : "pointer" }}
+                  style={{ ...S.btnPrimary, width: "100%", opacity: authMode === "signup" && (!termsChecked || !ageConfirmed) ? 0.4 : 1, cursor: authMode === "signup" && (!termsChecked || !ageConfirmed) ? "not-allowed" : "pointer" }}
                   type="submit"
-                  disabled={authBusy || (authMode === "signup" && !termsChecked)}
+                  disabled={authBusy || (authMode === "signup" && (!termsChecked || !ageConfirmed))}
                 >
                   {authBusy ? "..." : authMode === "login" ? "Sign In" : "Create Account"}
                 </button>
@@ -2255,6 +2386,7 @@ useEffect(() => {
         {footer}
       </div>
       {modal}
+      {topicBlockedModal}
     </div>
   );
 
@@ -2663,7 +2795,12 @@ useEffect(() => {
             </div>
           )}
           {sessionDetailError && (
-            <div style={S.errorBox}>{sessionDetailError}</div>
+            <>
+              <div style={S.errorBox}>{sessionDetailError}</div>
+              <div style={{ fontSize: "0.76rem", color: "#8a879e", textAlign: "center", marginTop: "0.5rem" }}>
+                Need help? <a href="mailto:support@mindtranceformapp.com" style={{ color: "#a8d8c8", textDecoration: "underline" }}>support@mindtranceformapp.com</a>
+              </div>
+            </>
           )}
           {!sessionsLoading && sessions.length === 0 && (
             <div style={{ color: "#8a879e", textAlign: "center", padding: "2rem 0" }}>No sessions yet. Generate your first one!</div>
@@ -2960,7 +3097,7 @@ useEffect(() => {
               <button style={S.btnPrimary} onClick={generate}>Try Again ✦</button>
             </div>
             <div style={{ marginTop: "1rem", fontSize: "0.78rem", color: "#8a879e" }}>
-              If this keeps happening, <a href="mailto:support@mindtranceformapp.com" style={{ color: "#a8d8c8", textDecoration: "none" }}>contact support</a>.
+              Need help? <a href="mailto:support@mindtranceformapp.com" style={{ color: "#a8d8c8", textDecoration: "underline" }}>support@mindtranceformapp.com</a>
             </div>
           </div>
         </div>
@@ -3015,7 +3152,8 @@ useEffect(() => {
             )}
             {isPastDue && (
               <div style={{ fontSize: "0.78rem", color: "#e87c7c", marginBottom: "0.5rem" }}>
-                Payment failed — please update your payment method
+                Payment failed — please update your payment method.{" "}
+                <a href="mailto:support@mindtranceformapp.com" style={{ color: "#e87c7c", textDecoration: "underline" }}>Need help?</a>
               </div>
             )}
 
@@ -3068,6 +3206,41 @@ useEffect(() => {
               </div>
             )}
           </div>
+
+          {/* ── Delete Account ── */}
+          {user?.email && (
+            <div style={{ ...S.card, marginTop: "0.75rem" }}>
+              <div style={{ fontSize: "1rem", fontWeight: 300, marginBottom: "0.4rem", color: "#e8e6f0" }}>Account Data</div>
+              <div style={{ fontSize: "0.8rem", color: "#8a879e", lineHeight: 1.65, marginBottom: "1rem" }}>
+                Permanently delete your account and all associated data — sessions, audio files, and personal information. This cannot be undone.
+              </div>
+              {deleteAcctError && <div style={{ ...S.infoBox, borderColor: "rgba(232,124,124,0.3)", color: "#e87c7c", marginBottom: "0.75rem", fontSize: "0.82rem" }}>{deleteAcctError}</div>}
+              {!deleteAcctConfirm ? (
+                <button
+                  style={{ ...S.btn, width: "100%", color: "#e87c7c", borderColor: "rgba(232,124,124,0.3)" }}
+                  onClick={() => { setDeleteAcctConfirm(true); setDeleteAcctError(""); }}
+                >
+                  Delete My Account and Data
+                </button>
+              ) : (
+                <div style={{ ...S.infoBox, borderColor: "rgba(232,135,100,0.3)" }}>
+                  <div style={{ fontSize: "0.88rem", color: "#e8e6f0", marginBottom: "1rem", lineHeight: 1.6 }}>
+                    Are you absolutely sure? All your sessions and data will be permanently deleted.
+                  </div>
+                  <div style={S.row}>
+                    <button style={S.btn} onClick={() => { setDeleteAcctConfirm(false); setDeleteAcctError(""); }}>Cancel</button>
+                    <button
+                      style={{ ...S.btn, color: "#e87c7c", borderColor: "rgba(232,124,124,0.35)" }}
+                      onClick={handleDeleteAccount}
+                      disabled={deleteAcctBusy}
+                    >
+                      {deleteAcctBusy ? "Deleting..." : "Yes, Delete Everything"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Referral Section ── */}
           {user?.email && (

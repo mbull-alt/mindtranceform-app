@@ -1,5 +1,4 @@
-// Dev-only fallback. Production builds replace this file via the stamp-sw Vite plugin.
-const CACHE = 'mt-dev';
+const CACHE = 'mt-__BUILD_TIMESTAMP__';
 const SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', e => {
@@ -9,6 +8,9 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
+  // Delete old caches but do NOT claim existing clients — taking control of
+  // in-flight sessions mid-load causes fetch handlers to serve cached HTML for
+  // JS requests, producing white screens. New SW takes over on next navigation.
   e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))

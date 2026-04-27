@@ -2,13 +2,20 @@
   "name": "mindtranceform-app",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify": "node scripts/verify-dist.js",
+    "predeploy": "npm run build && npm run verify",
+    "deploy": "npx vercel --prod"
   },
   "dependencies": {
+    "@sentry/react": "^10.50.0",
+    "@sentry/vite-plugin": "^5.2.0",
     "@supabase/supabase-js": "^2.103.0",
+    "posthog-js": "^1.372.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
