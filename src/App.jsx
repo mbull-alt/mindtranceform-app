@@ -650,6 +650,27 @@ function BackgroundPlayer({ background, intensity }) {
   // Clean up AudioContext when component unmounts or background changes
   useEffect(() => () => stopBg(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Resume AudioContext after screen lock / tab switch; restart generators if they died.
+  useEffect(() => {
+    let hiddenAt = 0;
+    function onHide()    { if (document.visibilityState === "hidden") hiddenAt = Date.now(); }
+    function onVisible() {
+      if (document.visibilityState !== "visible" || !ctxRef.current) return;
+      const wasGoneLong = Date.now() - hiddenAt > 2000;
+      if (ctxRef.current.state === "suspended") {
+        ctxRef.current.resume().then(() => {
+          if (wasGoneLong) { stopBg(); startBg(); }
+        }).catch(() => {});
+      }
+    }
+    document.addEventListener("visibilitychange", onHide);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!background || !window.AudioContext && !window.webkitAudioContext) return null;
 
   function startBg() {
@@ -799,6 +820,7 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
   const scrubbingRef   = useRef(false);
   // Store src in a ref and set it imperatively so React re-renders never touch the audio src.
   const srcRef         = useRef(null);
+  const wakeLockRef    = useRef(null);
   const [playing, setPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1.0);
 
@@ -812,8 +834,29 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
   // Mount/unmount diagnostic — confirms the audio element is stable during interaction.
   useEffect(() => {
     console.log("[AUDIO MOUNT] element created, src=", ref.current?.src || "(not yet set)");
-    return () => console.log("[AUDIO UNMOUNT]");
-  }, []);
+    return () => { console.log("[AUDIO UNMOUNT]"); releaseWakeLock(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Screen Wake Lock — keeps display on (dimmed) while audio plays.
+  // Re-acquired on unlock because the OS releases it automatically on screen-off.
+  async function acquireWakeLock() {
+    if (!("wakeLock" in navigator) || wakeLockRef.current) return;
+    try {
+      wakeLockRef.current = await navigator.wakeLock.request("screen");
+      wakeLockRef.current.addEventListener("release", () => { wakeLockRef.current = null; });
+    } catch {}
+  }
+  function releaseWakeLock() {
+    try { wakeLockRef.current?.release(); } catch {}
+    wakeLockRef.current = null;
+  }
+  useEffect(() => {
+    function onVisible() {
+      if (document.visibilityState === "visible" && playing) acquireWakeLock();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [playing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function fmt(s) {
     if (!isFinite(s) || s < 0) return "0:00";
@@ -834,10 +877,14 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
     navigator.mediaSession.setActionHandler("seekforward",  () => { if (ref.current) ref.current.currentTime += 15; });
     navigator.mediaSession.setActionHandler("seekbackward", () => { if (ref.current) ref.current.currentTime -= 15; });
     navigator.mediaSession.setActionHandler("seekto", (d) => { if (ref.current && d.seekTime != null) ref.current.currentTime = d.seekTime; });
+    navigator.mediaSession.setActionHandler("play",  () => { ref.current?.play(); });
+    navigator.mediaSession.setActionHandler("pause", () => { ref.current?.pause(); });
     return () => {
       navigator.mediaSession.setActionHandler("seekforward",  null);
       navigator.mediaSession.setActionHandler("seekbackward", null);
       navigator.mediaSession.setActionHandler("seekto", null);
+      navigator.mediaSession.setActionHandler("play",  null);
+      navigator.mediaSession.setActionHandler("pause", null);
     };
   }, []);
 
@@ -865,9 +912,21 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
             if (saved > 5 && ref.current) ref.current.currentTime = saved;
           }
         }}
-        onPlay={() => { setPlaying(true); onPlay?.(); }}
-        onPause={() => { setPlaying(false); onPause?.(); }}
-        onEnded={() => { setPlaying(false); localStorage.removeItem("mt_audio_position"); }}
+        onPlay={() => {
+          setPlaying(true); onPlay?.();
+          acquireWakeLock();
+          if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+        }}
+        onPause={() => {
+          setPlaying(false); onPause?.();
+          releaseWakeLock();
+          if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "paused";
+        }}
+        onEnded={() => {
+          setPlaying(false); localStorage.removeItem("mt_audio_position");
+          releaseWakeLock();
+          if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "none";
+        }}
         onError={onError}
       />
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
@@ -925,6 +984,7 @@ export default function MindTranceformApp() {
   const [user, setUser]           = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [view, setView]           = useState("auth");
+  const [pendingResume, setPendingResume] = useState(null);
 
   // Plan & usage (localStorage)
   const [plan, setPlan]               = useState(() => localStorage.getItem("mt_plan"));
@@ -1278,24 +1338,22 @@ useEffect(() => {
         if (currentPath === "/admin/content") {
           setView(session?.user?.email === adminEmail ? "adminContent" : (session?.user ? "home" : "landing"));
         } else if (session?.user) {
-          // Attempt to restore a session interrupted by screen lock / PWA suspend.
-          const RESTORE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-          let restored = false;
+          // On cold start, show home + "Resume" prompt rather than silently navigating.
+          // This prevents the SIGNED_IN race: getSession would consume mt_session_state,
+          // then SIGNED_IN fires, finds nothing, and resets the view to home.
+          const RESTORE_TTL_MS = 30 * 60 * 1000;
           try {
             const raw = localStorage.getItem("mt_session_state");
             if (raw) {
               const saved = JSON.parse(raw);
               localStorage.removeItem("mt_session_state");
-              if (saved.savedAt && Date.now() - saved.savedAt < RESTORE_TTL_MS) {
-                if (saved.result)          setResult(saved.result);
-                if (saved.selectedSession) setSelectedSession(saved.selectedSession);
-                if (saved.form)            setForm(saved.form);
-                setView(saved.view || "home");
-                restored = true;
+              const restorable = new Set(["sessionDetail", "result"]);
+              if (saved.savedAt && Date.now() - saved.savedAt < RESTORE_TTL_MS && restorable.has(saved.view)) {
+                setPendingResume(saved);
               }
             }
           } catch {}
-          if (!restored) setView("home");
+          setView("home");
         } else {
           setView(isRootPath ? "landing" : "auth");
         }
@@ -1327,10 +1385,12 @@ useEffect(() => {
         if (currentPath === "/admin/content" && u?.email === adminEmail) {
           setView("adminContent");
         } else {
-          // Before resetting to home, check if there's a session to restore
-          // (e.g. user unlocked tablet and Supabase re-fired SIGNED_IN).
+          // On SIGNED_IN (cold start or re-auth), check for a saved session.
+          // Show home + Resume prompt rather than silently navigating — avoids the
+          // race where getSession already consumed mt_session_state and SIGNED_IN
+          // would see nothing and unconditionally reset the view to home.
           const RESTORE_TTL_MS = 30 * 60 * 1000;
-          let restored = false;
+          let resumed = false;
           try {
             const raw = localStorage.getItem("mt_session_state");
             if (raw) {
@@ -1338,17 +1398,15 @@ useEffect(() => {
               const restorable = new Set(["sessionDetail", "result"]);
               if (saved.savedAt && Date.now() - saved.savedAt < RESTORE_TTL_MS && restorable.has(saved.view)) {
                 localStorage.removeItem("mt_session_state");
-                if (saved.result)          setResult(saved.result);
-                if (saved.selectedSession) setSelectedSession(saved.selectedSession);
-                if (saved.form)            setForm(saved.form);
-                setView(saved.view);
-                restored = true;
+                setPendingResume(saved);
+                resumed = true;
               }
             }
           } catch {}
-          if (!restored) setView("home");
+          if (!resumed) setView("home");
         }
       } else if (event === "SIGNED_OUT") {
+        setPendingResume(null);
         setView("landing");
       }
       if (u) {
@@ -3402,6 +3460,25 @@ useEffect(() => {
               </button>
             </div>
           )}
+          {pendingResume && (
+            <div style={{ ...S.infoBox, marginBottom: "1.25rem", textAlign: "center", borderColor: "rgba(168,216,200,0.35)" }}>
+              <div style={{ fontSize: "0.87rem", color: "#a8d8c8", marginBottom: "0.65rem" }}>You have an in-progress session</div>
+              <button
+                style={{ ...S.btnPrimary, width: "100%", padding: "0.65rem", marginBottom: "0.45rem", fontSize: "0.9rem" }}
+                onClick={() => {
+                  if (pendingResume.result)          setResult(pendingResume.result);
+                  if (pendingResume.selectedSession) setSelectedSession(pendingResume.selectedSession);
+                  if (pendingResume.form)            setForm(pendingResume.form);
+                  setView(pendingResume.view);
+                  setPendingResume(null);
+                }}
+              >▶ Resume your session</button>
+              <button
+                style={{ fontSize: "0.74rem", color: "#8a879e", background: "none", border: "none", cursor: "pointer", padding: "0.15rem" }}
+                onClick={() => setPendingResume(null)}
+              >Dismiss</button>
+            </div>
+          )}
           {welcomeMsg && (
             <div style={{ ...S.infoBox, marginBottom: "1.25rem", textAlign: "center", color: "#a8d8c8" }}>
               ✦ {welcomeMsg}
@@ -3413,7 +3490,7 @@ useEffect(() => {
           <div style={{ fontSize: "0.78rem", color: "#8a879e", marginBottom: "2rem" }}>{user?.email || ""}</div>
           <button
             style={{ ...S.btnPrimary, width: "100%", padding: "1rem", marginBottom: "0.75rem", fontSize: "1rem" }}
-            onClick={() => { setStep(0); setForm(EMPTY_FORM); setError(""); setResult(null); setView("quiz"); setWelcomeMsg(""); }}
+            onClick={() => { setStep(0); setForm(EMPTY_FORM); setError(""); setResult(null); setPendingResume(null); setView("quiz"); setWelcomeMsg(""); }}
           >
             ✦ New Session
           </button>
