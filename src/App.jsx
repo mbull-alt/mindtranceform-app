@@ -1087,6 +1087,7 @@ export default function MindTranceformApp() {
   const [legalModal, setLegalModal] = useState(null); // null | "privacy" | "terms"
   const [termsChecked, setTermsChecked] = useState(false);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [showCreateAccount, setShowCreateAccount] = useState(false);
 
   // Delete account
   const [deleteAcctConfirm, setDeleteAcctConfirm] = useState(false);
@@ -2309,95 +2310,142 @@ useEffect(() => {
             </>
           ) : (
             <>
-              <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "1.5rem", textAlign: "center" }}>
-                {authMode === "login" ? "Welcome back" : "Create your account"}
-              </div>
-              {authError && (
-                <div style={authError.includes("Check your email") ? S.infoBox : S.errorBox}>{authError}</div>
-              )}
-              <form onSubmit={handleAuth}>
-                <input style={{ ...S.input, marginBottom: "0.75rem" }} type="email" placeholder="Email"
-                  value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required autoFocus />
-                <input style={{ ...S.input, marginBottom: authMode === "login" ? "0.4rem" : "1rem" }}
-                  type="password" placeholder="Password (min 6 characters)"
-                  value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required />
-                {authMode === "login" && (
-                  <div style={{ textAlign: "right", marginBottom: "1.25rem" }}>
-                    <button type="button" style={{ ...S.resetBtn, fontSize: "0.78rem" }}
-                      onClick={() => { setAuthForgot(true); setAuthError(""); }}>
-                      Forgot password?
+              {authMode === "login" ? (
+                <>
+                  <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "1.5rem", textAlign: "center" }}>
+                    Welcome back
+                  </div>
+                  {authError && (
+                    <div style={authError.includes("Check your email") ? S.infoBox : S.errorBox}>{authError}</div>
+                  )}
+                  <form onSubmit={handleAuth}>
+                    <input style={{ ...S.input, marginBottom: "0.75rem" }} type="email" placeholder="Email"
+                      value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required autoFocus />
+                    <input style={{ ...S.input, marginBottom: "0.4rem" }}
+                      type="password" placeholder="Password (min 6 characters)"
+                      value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required />
+                    <div style={{ textAlign: "right", marginBottom: "1.25rem" }}>
+                      <button type="button" style={{ ...S.resetBtn, fontSize: "0.78rem" }}
+                        onClick={() => { setAuthForgot(true); setAuthError(""); }}>
+                        Forgot password?
+                      </button>
+                    </div>
+                    <button style={{ ...S.btnPrimary, width: "100%" }} type="submit" disabled={authBusy}>
+                      {authBusy ? "..." : "Sign In"}
+                    </button>
+                  </form>
+                  <div style={S.freeTag}>✦ Your first session is free. No card needed.</div>
+                  <div style={{ textAlign: "center", marginTop: "0.75rem" }}>
+                    <button style={S.resetBtn} onClick={() => { setAuthMode("signup"); setAuthError(""); }}>
+                      No account? Sign up free
                     </button>
                   </div>
-                )}
-                {authMode === "signup" && (
-                  <>
-                    <div
-                      style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "0.85rem" }}
-                      onClick={() => setTermsChecked((v) => !v)}
-                    >
-                      <div style={{
-                        width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
-                        border: termsChecked ? "none" : "1.5px solid rgba(168,216,200,0.4)",
-                        background: termsChecked ? "#a8d8c8" : "transparent",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 11, color: "#07091a", transition: "all 0.2s",
-                      }}>
-                        {termsChecked ? "✓" : ""}
-                      </div>
-                      <span style={{ fontSize: "0.8rem", color: "#8a879e", lineHeight: 1.55 }}>
-                        I agree to the{" "}
-                        <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
-                          onClick={(e) => { e.stopPropagation(); setLegalModal("terms"); }}>Terms of Service</span>
-                        {", "}
-                        <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
-                          onClick={(e) => { e.stopPropagation(); setLegalModal("privacy"); }}>Privacy Policy</span>
-                        {", and "}
-                        <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
-                          onClick={(e) => { e.stopPropagation(); setLegalModal("disclaimer"); }}>Clinical Disclaimer</span>
-                      </span>
+                  <div style={{ height: "0.5px", background: "rgba(255,255,255,0.07)", margin: "1.25rem 0" }} />
+                  <div style={{ textAlign: "center" }}>
+                    <button style={{ ...S.resetBtn, color: "#8a879e" }} onClick={handleGuestLogin} disabled={authBusy}>
+                      Continue as guest
+                    </button>
+                    <div style={{ fontSize: "0.7rem", color: "#8a879e", marginTop: "0.35rem", opacity: 0.7 }}>
+                      1 free session · no account needed
                     </div>
-                    <div
-                      style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "1.25rem" }}
-                      onClick={() => setAgeConfirmed((v) => !v)}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* ── Signup: guest-first hierarchy ── */}
+                  <div style={{ fontSize: "1.3rem", fontWeight: 300, marginBottom: "1.5rem", textAlign: "center" }}>
+                    Start your free session
+                  </div>
+                  {authError && (
+                    <div style={authError.includes("Check your email") ? S.infoBox : S.errorBox}>{authError}</div>
+                  )}
+                  {/* Primary CTA — guest path */}
+                  <button
+                    style={{ ...S.btnPrimary, width: "100%" }}
+                    onClick={handleGuestLogin}
+                    disabled={authBusy}
+                  >
+                    {authBusy ? "..." : "Start Free Session →"}
+                  </button>
+                  <div style={{ fontSize: "0.78rem", color: "#8a879e", textAlign: "center", marginTop: "0.6rem", marginBottom: "1.5rem" }}>
+                    No card needed · No account required
+                  </div>
+                  <div style={{ height: "0.5px", background: "rgba(255,255,255,0.07)", margin: "0 0 1.25rem 0" }} />
+                  {/* Secondary — sign in */}
+                  <div style={{ textAlign: "center", marginBottom: "0.75rem" }}>
+                    <button style={S.resetBtn} onClick={() => { setAuthMode("login"); setAuthError(""); }}>
+                      Already have an account? Sign in
+                    </button>
+                  </div>
+                  {/* Tertiary — create account (collapsible) */}
+                  <div style={{ textAlign: "center" }}>
+                    <button
+                      style={{ ...S.resetBtn, fontSize: "0.78rem", color: "#8a879e" }}
+                      onClick={() => setShowCreateAccount((v) => !v)}
                     >
-                      <div style={{
-                        width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
-                        border: ageConfirmed ? "none" : "1.5px solid rgba(168,216,200,0.4)",
-                        background: ageConfirmed ? "#a8d8c8" : "transparent",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 11, color: "#07091a", transition: "all 0.2s",
-                      }}>
-                        {ageConfirmed ? "✓" : ""}
+                      {showCreateAccount ? "▲ Hide" : "Want to save your sessions? Create an account →"}
+                    </button>
+                  </div>
+                  {showCreateAccount && (
+                    <form onSubmit={handleAuth} style={{ marginTop: "1rem" }}>
+                      <input style={{ ...S.input, marginBottom: "0.75rem" }} type="email" placeholder="Email"
+                        value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required autoFocus />
+                      <input style={{ ...S.input, marginBottom: "1rem" }}
+                        type="password" placeholder="Password (min 6 characters)"
+                        value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required />
+                      <div
+                        style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "0.85rem" }}
+                        onClick={() => setTermsChecked((v) => !v)}
+                      >
+                        <div style={{
+                          width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
+                          border: termsChecked ? "none" : "1.5px solid rgba(168,216,200,0.4)",
+                          background: termsChecked ? "#a8d8c8" : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 11, color: "#07091a", transition: "all 0.2s",
+                        }}>
+                          {termsChecked ? "✓" : ""}
+                        </div>
+                        <span style={{ fontSize: "0.8rem", color: "#8a879e", lineHeight: 1.55 }}>
+                          I agree to the{" "}
+                          <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
+                            onClick={(e) => { e.stopPropagation(); setLegalModal("terms"); }}>Terms of Service</span>
+                          {", "}
+                          <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
+                            onClick={(e) => { e.stopPropagation(); setLegalModal("privacy"); }}>Privacy Policy</span>
+                          {", and "}
+                          <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
+                            onClick={(e) => { e.stopPropagation(); setLegalModal("disclaimer"); }}>Clinical Disclaimer</span>
+                        </span>
                       </div>
-                      <span style={{ fontSize: "0.8rem", color: "#8a879e", lineHeight: 1.55 }}>
-                        I confirm I am <strong style={{ color: "#e8e6f0" }}>18 years of age or older</strong>
-                      </span>
-                    </div>
-                  </>
-                )}
-                <button
-                  style={{ ...S.btnPrimary, width: "100%", opacity: authMode === "signup" && (!termsChecked || !ageConfirmed) ? 0.4 : 1, cursor: authMode === "signup" && (!termsChecked || !ageConfirmed) ? "not-allowed" : "pointer" }}
-                  type="submit"
-                  disabled={authBusy || (authMode === "signup" && (!termsChecked || !ageConfirmed))}
-                >
-                  {authBusy ? "..." : authMode === "login" ? "Sign In" : "Create Account"}
-                </button>
-              </form>
-              <div style={S.freeTag}>✦ Your first session is free. No card needed.</div>
-              <div style={{ textAlign: "center", marginTop: "0.75rem" }}>
-                <button style={S.resetBtn} onClick={() => { setAuthMode(authMode === "login" ? "signup" : "login"); setAuthError(""); }}>
-                  {authMode === "login" ? "No account? Sign up free" : "Already have an account? Sign in"}
-                </button>
-              </div>
-              <div style={{ height: "0.5px", background: "rgba(255,255,255,0.07)", margin: "1.25rem 0" }} />
-              <div style={{ textAlign: "center" }}>
-                <button style={{ ...S.resetBtn, color: "#8a879e" }} onClick={handleGuestLogin} disabled={authBusy}>
-                  Continue as guest
-                </button>
-                <div style={{ fontSize: "0.7rem", color: "#8a879e", marginTop: "0.35rem", opacity: 0.7 }}>
-                  1 free session · no account needed
-                </div>
-              </div>
+                      <div
+                        style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "1.25rem" }}
+                        onClick={() => setAgeConfirmed((v) => !v)}
+                      >
+                        <div style={{
+                          width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
+                          border: ageConfirmed ? "none" : "1.5px solid rgba(168,216,200,0.4)",
+                          background: ageConfirmed ? "#a8d8c8" : "transparent",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 11, color: "#07091a", transition: "all 0.2s",
+                        }}>
+                          {ageConfirmed ? "✓" : ""}
+                        </div>
+                        <span style={{ fontSize: "0.8rem", color: "#8a879e", lineHeight: 1.55 }}>
+                          I confirm I am <strong style={{ color: "#e8e6f0" }}>18 years of age or older</strong>
+                        </span>
+                      </div>
+                      <button
+                        style={{ ...S.btnPrimary, width: "100%", opacity: (!termsChecked || !ageConfirmed) ? 0.4 : 1, cursor: (!termsChecked || !ageConfirmed) ? "not-allowed" : "pointer" }}
+                        type="submit"
+                        disabled={authBusy || !termsChecked || !ageConfirmed}
+                      >
+                        {authBusy ? "..." : "Create Account"}
+                      </button>
+                    </form>
+                  )}
+                </>
+              )}
             </>
           )}
         </div>
