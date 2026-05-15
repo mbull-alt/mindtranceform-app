@@ -50,10 +50,10 @@ function getLengthOptions(plan, isAdmin) {
   const rank = isAdmin ? 3 : ({ null: 0, undefined: 0, single: 1, premium: 2, pro: 3 }[plan] ?? 0);
   return [
     { value: "5",  icon: "◦", label: "5 minutes",  sub: "Quick reset",          locked: false },
-    { value: "10", icon: "◎", label: "10 minutes", sub: "Full session",          locked: rank < 2 },
-    { value: "15", icon: "●", label: "15 minutes", sub: "Deep dive",             locked: rank < 2 },
-    { value: "20", icon: "◉", label: "20 minutes", sub: "Extended journey",      locked: rank < 3 },
-    { value: "30", icon: "◈", label: "30 minutes", sub: "Complete immersion",    locked: rank < 3 },
+    { value: "10", icon: "◎", label: "10 minutes", sub: "Full session",          locked: rank < 2, badge: "🔒 Premium" },
+    { value: "15", icon: "●", label: "15 minutes", sub: "Deep dive",             locked: rank < 2, badge: "🔒 Premium" },
+    { value: "20", icon: "◉", label: "20 minutes", sub: "Extended journey",      locked: rank < 3, badge: "🔒 Pro" },
+    { value: "30", icon: "◈", label: "30 minutes", sub: "Complete immersion",    locked: rank < 3, badge: "🔒 Pro" },
   ];
 }
 
@@ -132,7 +132,7 @@ function buildSteps(plan, isAdmin) {
     { id: "program",    question: "Choose your program",                        type: "options", options: getProgramOptions(plan, isAdmin), lockedAction: isAdmin ? undefined : "payment" },
     { id: "voice",      question: "Choose your voice",                          type: "options", options: VOICES },
     { id: "background", question: "Choose your background sound",               type: "options", options: BACKGROUNDS },
-    { id: "length",     question: "How long would you like your session?",      type: "options", options: getLengthOptions(plan, isAdmin) },
+    { id: "length",     question: "How long would you like your session?",      type: "options", options: getLengthOptions(plan, isAdmin), lockedAction: isAdmin ? undefined : "payment" },
     { id: "style",      question: "Choose your session style",                  type: "options", options: getStyleOptions(plan, isAdmin) },
     { id: "personalization", question: "How deeply personalized should your session be?", type: "personalization", options: [
       { value: "standard", icon: "◎", label: "Standard",     sub: "Personalized to your name and goal" },
@@ -1407,6 +1407,10 @@ useEffect(() => {
           if (!resumed) setView("home");
         }
       } else if (event === "SIGNED_OUT") {
+        localStorage.removeItem("mt_plan");
+        localStorage.removeItem("mt_sessions_used");
+        setPlan(null);
+        setSessionsUsed(0);
         setPendingResume(null);
         setView("landing");
       }
@@ -1539,6 +1543,10 @@ useEffect(() => {
     await supabase.auth.signOut();
     localStorage.removeItem("mt_user_id");
     localStorage.removeItem("mt_user_email");
+    localStorage.removeItem("mt_plan");
+    localStorage.removeItem("mt_sessions_used");
+    setPlan(null);
+    setSessionsUsed(0);
     setStep(0);
     setForm(EMPTY_FORM);
     setResult(null);
