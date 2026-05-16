@@ -1393,6 +1393,14 @@ useEffect(() => {
             body: JSON.stringify({ terms_accepted_at: termsAcceptedAt || null }),
           }).catch(() => {});
           fetchAndSetPlan(session.access_token, u.email);
+        } else if (event === "SIGNED_IN" && !u.email) {
+          // Anonymous sign-in — clear any stale paid plan from a previous session
+          localStorage.removeItem("mt_plan");
+          setPlan(null);
+          // Assign persistent guest_id for server-side session count enforcement
+          if (!localStorage.getItem("mt_guest_id")) {
+            localStorage.setItem("mt_guest_id", crypto.randomUUID());
+          }
         }
       } else {
         localStorage.removeItem("mt_user_id");
@@ -1425,6 +1433,10 @@ useEffect(() => {
       if (data.success && data.plan) {
         localStorage.setItem("mt_plan", data.plan);
         setPlan(data.plan);
+      } else if (data.success) {
+        // Backend says no plan — clear any stale value from a previous session
+        localStorage.removeItem("mt_plan");
+        setPlan(null);
       }
     } catch {}
   }
@@ -1718,8 +1730,10 @@ useEffect(() => {
   async function generate() {
     // Admin always has unlimited access — skip all payment checks
     const adminUser = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
-    // Free session limit: null plan = free tier, 1 session lifetime
-    if (!adminUser && !plan && sessionsUsed >= 1) {
+    // Anonymous users never have a paid plan regardless of localStorage
+    const effectivePlan = user?.is_anonymous ? null : plan;
+    // Free session limit: 1 session lifetime for guest / unsubscribed users
+    if (!adminUser && !effectivePlan && sessionsUsed >= 1) {
       setView("payment");
       return;
     }
@@ -1745,6 +1759,7 @@ useEffect(() => {
         idealLife: form.idealLife, deepQ1: form.deepQ1, deepQ2: form.deepQ2,
         deepQ3: form.deepQ3, deepQ4: form.deepQ4,
         affirmationStyle: form.affirmationStyle, backgroundIntensity: form.backgroundIntensity,
+        guestId: user?.is_anonymous ? localStorage.getItem("mt_guest_id") : undefined,
       });
       const response = await fetch(`${BACKEND_URL}/generate-session`, {
         method: "POST",
@@ -1826,6 +1841,7 @@ useEffect(() => {
         return;
       }
       if (data.error === "topic_blocked") { setTopicBlocked(true); return; }
+      if (data.error === "guest_limit") { setView("payment"); return; }
       throw new Error(typeof data.error === "string" ? data.error : "Generation failed. Please try again.");
     } catch (e) {
       const isNetwork = e instanceof TypeError && e.message.toLowerCase().includes("fetch");
