@@ -1789,9 +1789,9 @@ useEffect(() => {
               localStorage.setItem("mt_sessions_used", String(newUsed));
               setSessionsUsed(newUsed);
               const audioUrl = ev.sessionId && !ev.audioUnavailable
-                ? `${BACKEND_URL}/sessions/${ev.sessionId}/audio?token=${encodeURIComponent(token)}`
+                ? (ev.audioUrl || `${BACKEND_URL}/sessions/${ev.sessionId}/audio?token=${encodeURIComponent(token)}`)
                 : null;
-              console.log("[generate/sse] sessionId:", ev.sessionId, "audioUnavailable:", ev.audioUnavailable, "audioUrl set:", !!audioUrl);
+              console.log("[generate/sse] sessionId:", ev.sessionId, "audioUnavailable:", ev.audioUnavailable, "audioUrl set:", !!audioUrl, "storage:", !!ev.audioUrl);
               setResult({ script: ev.script, audioUrl, audioUnavailable: ev.audioUnavailable || !ev.sessionId });
               if (audioUrl) setAudioPulse(true);
               setView("result");
@@ -1816,9 +1816,9 @@ useEffect(() => {
         localStorage.setItem("mt_sessions_used", String(newUsed));
         setSessionsUsed(newUsed);
         const audioUrl = data.sessionId && !data.audioUnavailable
-          ? `${BACKEND_URL}/sessions/${data.sessionId}/audio?token=${encodeURIComponent(token)}`
+          ? (data.audioUrl || `${BACKEND_URL}/sessions/${data.sessionId}/audio?token=${encodeURIComponent(token)}`)
           : null;
-        console.log("[generate] sessionId:", data.sessionId, "audioUnavailable:", data.audioUnavailable, "audioUrl set:", !!audioUrl);
+        console.log("[generate] sessionId:", data.sessionId, "audioUnavailable:", data.audioUnavailable, "audioUrl set:", !!audioUrl, "storage:", !!data.audioUrl);
         setResult({ script: data.script, audioUrl, audioUnavailable: data.audioUnavailable || !data.sessionId });
         if (audioUrl) setAudioPulse(true);
         setView("result");
