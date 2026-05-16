@@ -75,55 +75,26 @@ const PAID_PLANS = [
   { id: "pro",     label: "Pro",            price: "$29.99", period: "/mo", sub: "Unlimited sessions · up to 30 min", accent: "#c9a8d8" },
 ];
 
+// Recommended voice per program — edit here to retune, no code search needed
+const VOICE_RECOMMENDATION = {
+  "Sleep":                "Female Whisper",
+  "Stress & Anxiety":     "Female Calm",
+  "Abundance":            "Female Warm",
+  "Confidence":           "Male Warm",
+  "Focus & Productivity": "Male Calm",
+  "Quit Smoking":         "Male Calm",
+  "Weight Loss Mindset":  "Female Warm",
+  "Relationship Healing": "Female Warm",
+};
+const DEFAULT_VOICE_RECOMMENDATION = "Female Calm";
+
 const EMPTY_FORM = {
   name: "", goal: "", program: "", voice: "", background: "",
-  length: "5", style: "", personalization: "standard",
+  length: "5", style: "", personalization: "deep",
   fears: "", motivation: "", idealLife: "",
   deepQ1: "", deepQ2: "", deepQ3: "", deepQ4: "",
-  affirmationStyle: "", backgroundIntensity: "",
+  affirmationStyle: "You are", backgroundIntensity: "",
 };
-
-// Returns 4 program-specific deep personalization questions
-function getDeepQuestions(program) {
-  const qs = {
-    "Sleep": [
-      { id: "deepQ1", placeholder: "What thoughts or worries keep you awake at night?" },
-      { id: "deepQ2", placeholder: "What does a perfect night's sleep feel like to you?" },
-      { id: "deepQ3", placeholder: "How would consistently great sleep transform your life?" },
-      { id: "deepQ4", placeholder: "Describe your ideal sleep environment or bedtime ritual" },
-    ],
-    "Stress & Anxiety": [
-      { id: "deepQ1", placeholder: "What is the main source of your stress or anxiety right now?" },
-      { id: "deepQ2", placeholder: "Where do you feel stress in your body?" },
-      { id: "deepQ3", placeholder: "What does a calm, stress-free version of you look and feel like?" },
-      { id: "deepQ4", placeholder: "What one thing calms you most when you're overwhelmed?" },
-    ],
-    "Abundance": [
-      { id: "deepQ1", placeholder: "Describe your specific vision of abundance — money, time, freedom?" },
-      { id: "deepQ2", placeholder: "What limiting belief is blocking you from abundance?" },
-      { id: "deepQ3", placeholder: "What is the first thing you would do with full abundance?" },
-      { id: "deepQ4", placeholder: "Name someone who embodies the abundance you desire" },
-    ],
-    "Confidence": [
-      { id: "deepQ1", placeholder: "In what situation do you most want to feel confident?" },
-      { id: "deepQ2", placeholder: "Describe a fully confident version of yourself" },
-      { id: "deepQ3", placeholder: "What has been your biggest barrier to confidence?" },
-      { id: "deepQ4", placeholder: "What is one strength you already know you have?" },
-    ],
-    "Focus & Productivity": [
-      { id: "deepQ1", placeholder: "What is the most important thing you need to focus on right now?" },
-      { id: "deepQ2", placeholder: "What is your main distraction or mental block?" },
-      { id: "deepQ3", placeholder: "What does peak performance or total flow feel like for you?" },
-      { id: "deepQ4", placeholder: "Describe a past moment when you were completely in the zone" },
-    ],
-  };
-  return qs[program] || [
-    { id: "deepQ1", placeholder: "What are you afraid of or holding onto?" },
-    { id: "deepQ2", placeholder: "What truly motivates you?" },
-    { id: "deepQ3", placeholder: "Describe your ideal life in one sentence" },
-    { id: "deepQ4", placeholder: "What is the first change you want to make?" },
-  ];
-}
 
 function buildSteps(plan, isAdmin) {
   const steps = [
@@ -134,15 +105,10 @@ function buildSteps(plan, isAdmin) {
     { id: "background", question: "Choose your background sound",               type: "options", options: BACKGROUNDS },
     { id: "length",     question: "How long would you like your session?",      type: "options", options: getLengthOptions(plan, isAdmin), lockedAction: isAdmin ? undefined : "payment" },
     { id: "style",      question: "Choose your session style",                  type: "options", options: getStyleOptions(plan, isAdmin) },
-    { id: "personalization", question: "How deeply personalized should your session be?", type: "personalization", options: [
-      { value: "standard", icon: "◎", label: "Standard",     sub: "Personalized to your name and goal" },
-      { value: "deep",     icon: "●", label: "Deep Personal", sub: "Tailored to your inner world" },
-    ]},
-    { id: "affirmationStyle", question: "How would you like your affirmations?", type: "options", options: [
-      { value: "I am",          icon: "◦", label: "I am...",       sub: "First person — powerful ownership" },
-      { value: "You are",       icon: "◎", label: "You are...",    sub: "Second person — like a trusted guide" },
-      { value: "Present tense", icon: "●", label: "Present tense", sub: "As if it's already true" },
-      { value: "Future tense",  icon: "◈", label: "Future tense",  sub: "Planting seeds of what's to come" },
+    { id: "personalization", question: "Make it yours", subtitle: "Your session is being written for you — not pulled from a library. Anything you share shapes the script.", type: "personalization" },
+    { id: "affirmationStyle", question: "How should affirmations be voiced?", type: "options", options: [
+      { value: "You are", icon: "◎", label: "You are...", sub: "Second person — like a trusted guide" },
+      { value: "I am",    icon: "◦", label: "I am...",    sub: "First person — your own inner voice" },
     ]},
     { id: "backgroundIntensity", question: "How prominent should the background sound be?", type: "options", options: [
       { value: "Subtle",    icon: "◦", label: "Subtle",    sub: "Barely there — voice is the focus" },
@@ -1088,6 +1054,7 @@ export default function MindTranceformApp() {
   const [termsChecked, setTermsChecked] = useState(false);
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [showCreateAccount, setShowCreateAccount] = useState(false);
+  const [showAllVoices, setShowAllVoices] = useState(false);
 
   // Delete account
   const [deleteAcctConfirm, setDeleteAcctConfirm] = useState(false);
@@ -1876,12 +1843,7 @@ useEffect(() => {
     if (s.type === "input") {
       if (!form[s.id].trim()) { setError("Please fill this in to continue."); return; }
     } else if (s.type === "personalization") {
-      if (!form[s.id]) { setError("Please choose an option."); return; }
-      if (form.personalization === "deep") {
-        if (!form.deepQ1.trim() || !form.deepQ2.trim() || !form.deepQ3.trim() || !form.deepQ4.trim()) {
-          setError("Please fill in all four fields to continue."); return;
-        }
-      }
+      // All fields optional — always allow proceeding
     } else {
       if (!form[s.id]) { setError("Please choose an option."); return; }
     }
@@ -3881,6 +3843,11 @@ useEffect(() => {
           <div style={S.progressBar}><div style={{ ...S.progressFill, width: `${pct}%` }} /></div>
           <div style={S.stepLabel}>Step {current.label}</div>
           <div style={S.stepQ}>{current.question}</div>
+          {current.subtitle && (
+            <div style={{ fontSize: "0.82rem", color: "#8a879e", lineHeight: 1.65, marginBottom: "1.25rem", marginTop: "-0.5rem" }}>
+              {current.subtitle}
+            </div>
+          )}
           {current.type === "input" ? (
             <input
               style={S.input}
@@ -3893,31 +3860,85 @@ useEffect(() => {
             />
           ) : current.type === "personalization" ? (
             <>
-              <OptionList options={current.options} selected={form[current.id]} onSelect={(val) => { updateForm(current.id, val); setError(""); }} />
-              {form.personalization === "deep" && (
-                <div style={{ marginTop: "1.25rem", display: "grid", gap: "0.6rem" }}>
-                  {getDeepQuestions(form.program).map(({ id, placeholder }) => (
-                    <textarea
-                      key={id}
-                      style={{ ...S.input, minHeight: 72, resize: "vertical", lineHeight: 1.55, overflow: "auto" }}
-                      placeholder={placeholder}
-                      value={form[id]}
-                      onChange={(e) => { updateForm(id, e.target.value); setError(""); }}
-                    />
-                  ))}
-                </div>
-              )}
+              <textarea
+                style={{ ...S.input, minHeight: 80, resize: "vertical", lineHeight: 1.55, overflow: "auto", marginBottom: "0.75rem" }}
+                placeholder="e.g. Anything turning over in your head — work, a relationship, sleep, something heavier..."
+                value={form.fears}
+                autoFocus
+                onChange={(e) => { updateForm("fears", e.target.value); setError(""); }}
+              />
+              <div style={{ fontSize: "0.78rem", color: "#8a879e", marginBottom: "0.75rem", marginTop: "-0.35rem", letterSpacing: "0.02em" }}>
+                What's weighing on you right now? <span style={{ opacity: 0.6 }}>(optional)</span>
+              </div>
+              <textarea
+                style={{ ...S.input, minHeight: 80, resize: "vertical", lineHeight: 1.55, overflow: "auto", marginBottom: "0.5rem" }}
+                placeholder="e.g. If this worked, what would be different tomorrow?"
+                value={form.idealLife}
+                onChange={(e) => { updateForm("idealLife", e.target.value); setError(""); }}
+              />
+              <div style={{ fontSize: "0.78rem", color: "#8a879e", marginBottom: "0.5rem", marginTop: "-0.35rem", letterSpacing: "0.02em" }}>
+                What does the change look like? <span style={{ opacity: 0.6 }}>(optional)</span>
+              </div>
+              <div style={{ fontSize: "0.72rem", color: "#8a879e", textAlign: "center", opacity: 0.7, marginTop: "0.25rem" }}>
+                Skip if nothing comes to mind — even one line shapes the session.
+              </div>
             </>
+          ) : current.id === "voice" ? (
+            (() => {
+              const recValue = VOICE_RECOMMENDATION[form.program] || DEFAULT_VOICE_RECOMMENDATION;
+              const recVoice = VOICES.find(v => v.value === recValue) || VOICES[0];
+              const otherVoices = VOICES.filter(v => v.value !== recVoice.value);
+              return (
+                <>
+                  <div style={{ fontSize: "0.65rem", letterSpacing: "0.22em", textTransform: "uppercase", color: "#a8d8c8", marginBottom: "0.6rem" }}>
+                    Recommended for you
+                  </div>
+                  <OptionList
+                    options={[recVoice]}
+                    selected={form.voice}
+                    onSelect={(val) => { updateForm("voice", val); setError(""); }}
+                    onPreview={previewVoice}
+                    previewLoading={previewLoading}
+                    previewPlaying={previewPlaying}
+                  />
+                  <button
+                    style={{ ...S.resetBtn, fontSize: "0.82rem", display: "block", margin: "0.85rem auto 0" }}
+                    onClick={() => setShowAllVoices(v => !v)}
+                  >
+                    {showAllVoices ? "▲ Fewer voices" : "More voices ↓"}
+                  </button>
+                  {showAllVoices && (
+                    <div style={{ marginTop: "0.75rem" }}>
+                      <OptionList
+                        options={otherVoices}
+                        selected={form.voice}
+                        onSelect={(val) => { updateForm("voice", val); setError(""); }}
+                        onPreview={previewVoice}
+                        previewLoading={previewLoading}
+                        previewPlaying={previewPlaying}
+                      />
+                    </div>
+                  )}
+                </>
+              );
+            })()
           ) : (
             <OptionList
               options={current.options}
               selected={form[current.id]}
-              onSelect={(val) => { updateForm(current.id, val); setError(""); }}
+              onSelect={(val) => {
+                if (current.id === "program") {
+                  const rec = VOICE_RECOMMENDATION[val] || DEFAULT_VOICE_RECOMMENDATION;
+                  setForm(f => ({ ...f, program: val, voice: rec }));
+                  setShowAllVoices(false);
+                } else {
+                  updateForm(current.id, val);
+                }
+                setError("");
+              }}
               onLockedSelect={current.lockedAction === "payment" ? () => setView("payment") : undefined}
               onPreview={
-                current.id === "voice" ? previewVoice :
-                current.id === "background" ? previewBackground :
-                undefined
+                current.id === "background" ? previewBackground : undefined
               }
               previewLoading={current.id === "background" ? bgPreviewLoading : previewLoading}
               previewPlaying={current.id === "background" ? bgPreviewPlaying : previewPlaying}
