@@ -20,7 +20,7 @@ function getProgramOptions(plan, isAdmin) {
     { value: "Confidence",           icon: "⚡", label: "Confidence",            sub: "Step into your power",              locked: !isPaid, badge: "🔒 Premium" },
     { value: "Focus & Productivity", icon: "🎯", label: "Focus & Productivity",  sub: "Clear mind, sharp execution",       locked: !isPaid, badge: "🔒 Premium" },
     { value: "Quit Smoking",         icon: "🌿", label: "Quit Smoking",          sub: "Break free for good",               locked: !isPaid, badge: "🔒 Premium" },
-    { value: "Weight Loss Mindset",  icon: "🦋", label: "Weight Loss Mindset",   sub: "Reshape how you see yourself",      locked: !isPaid, badge: "🔒 Premium" },
+    { value: "Weight Loss Mindset",  icon: "🦋", label: "Weight Loss Mindset",   sub: "Reshape how you see yourself" },
     { value: "Relationship Healing", icon: "💫", label: "Relationship Healing",  sub: "Open your heart, release the past", locked: !isPaid, badge: "🔒 Premium" },
     { value: "Abundance & Wealth",   icon: "💎", label: "Abundance & Wealth",    sub: "Reprogram your money mindset",      locked: !isPaid, badge: "🔒 Premium" },
   ];
@@ -788,7 +788,6 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
   const srcRef         = useRef(null);
   const wakeLockRef    = useRef(null);
   const [playing, setPlaying] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1.0);
 
   useEffect(() => {
     if (src && src !== srcRef.current) {
@@ -917,19 +916,6 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
       <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "#8a879e" }}>
         <span ref={timeRef}>0:00</span>
         <span>{durationRef.current > 0 ? fmt(durationRef.current) : "--:--"}</span>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}>
-        <span style={{ fontSize: "0.72rem", color: "#8a879e", whiteSpace: "nowrap" }}>Speed</span>
-        {[0.75, 0.85, 1.0, 1.15, 1.25].map(r => (
-          <button
-            key={r}
-            style={{ ...ring, padding: "0.25rem 0.5rem", fontSize: "0.72rem", background: playbackRate === r ? "rgba(168,216,200,0.22)" : "rgba(168,216,200,0.04)", borderColor: playbackRate === r ? "rgba(168,216,200,0.6)" : "rgba(168,216,200,0.2)" }}
-            onClick={() => {
-              setPlaybackRate(r);
-              if (ref.current) ref.current.playbackRate = r;
-            }}
-          >{r === 1.0 ? "1×" : `${r}×`}</button>
-        ))}
       </div>
       {noteText && <div style={{ fontSize: "0.73rem", color: "#8a879e", textAlign: "center", marginTop: "0.35rem" }}>{noteText}</div>}
     </div>
