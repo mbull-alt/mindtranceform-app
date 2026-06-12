@@ -113,8 +113,8 @@ const EMPTY_FORM = {
 function buildSteps(plan, isAdmin) {
   const steps = [
     { id: "name",       question: "What is your name?",                        type: "input",   placeholder: "Your first name..." },
-    { id: "goal",       question: "What do you want to let go of or achieve?", type: "input",   placeholder: "e.g. Release anxiety and sleep deeply..." },
     { id: "program",    question: "Choose your program",                        type: "options", options: getProgramOptions(plan, isAdmin), lockedAction: isAdmin ? undefined : "payment" },
+    { id: "goal",       question: "What do you want to let go of or achieve?", type: "input",   placeholder: "e.g. Release anxiety and sleep deeply..." },
     { id: "voice",      question: "Choose your voice",                          type: "options", options: VOICES },
     { id: "pace",       question: "Speaking pace",                              type: "options", options: [
       { value: "slow",   icon: "◦", label: "Slow",   sub: "Deep and relaxed — more space between words" },
