@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { TermsPage } from "./TermsPage.jsx";
 import { PrivacyPage } from "./PrivacyPage.jsx";
 import { CookiesPage } from "./CookiesPage.jsx";
+import { PrivacyDataPage } from "./PrivacyDataPage.jsx";
 
 const BACKEND_URL = "https://mindtranceform-backend.onrender.com";
 const supabase = createClient(
@@ -75,6 +76,19 @@ const PAID_PLANS = [
   { id: "pro",     label: "Pro",            price: "$29.99", period: "/mo", sub: "Unlimited sessions · up to 30 min", accent: "#c9a8d8" },
 ];
 
+const TECHNIQUE_TOOLTIPS = {
+  "Progressive muscle relaxation": "Progressive muscle relaxation guides you through tensing and releasing each muscle group in sequence, signaling your nervous system that it's safe to let go. It's particularly effective for physical tension and sleep onset.",
+  "Body scan": "A body scan gently moves awareness through each part of the body in sequence, releasing stored tension and bringing you into full presence. It's highly effective for anxiety, grounding, and preparing for sleep.",
+  "Guided visualization": "Guided visualization leads you through a vivid mental journey — engaging all your senses to reprogram how you feel about a goal or outcome. It's especially powerful for abundance, confidence, and goal-setting.",
+  "Breath-anchored awareness": "Breath-anchored awareness uses your breath as a steady anchor to quiet racing thoughts and activate the parasympathetic nervous system. It's the go-to technique for acute anxiety and panic.",
+  "Hypnotic countdown induction": "A hypnotic countdown uses descending numbers paired with deepening suggestions to guide you into a receptive trance state. It's the classic induction used across most hypnotherapy programs.",
+  "Positive suggestion loop": "Positive suggestion loops repeat and vary carefully chosen affirmations at the threshold of trance, where the subconscious is most receptive to new beliefs. Ideal for habit change and abundance work.",
+  "EMDR-inspired bilateral": "EMDR-inspired bilateral techniques use alternating sensory cues to help process distressing memories and reduce their emotional charge. Adapted here for relaxation and trauma-informed stress reduction.",
+  "Loving-kindness (metta)": "Loving-kindness meditation (metta) cultivates feelings of warmth and goodwill — starting inward and expanding outward. It's deeply effective for grief, self-esteem, and relationship healing.",
+  "Cognitive defusion": "Cognitive defusion creates distance between you and your thoughts, helping you observe them without being controlled by them. It's the core technique for rumination, intrusive thoughts, and anxiety.",
+  "Somatic release": "Somatic release works directly with body sensations to discharge stored stress and trauma that talking alone can't reach. It's particularly effective for physical tension, chronic stress, and PTSD.",
+};
+
 // Recommended voice per program — edit here to retune, no code search needed
 const VOICE_RECOMMENDATION = {
   "Sleep":                "Female Whisper",
@@ -93,7 +107,7 @@ const EMPTY_FORM = {
   length: "5", style: "", personalization: "deep",
   fears: "", motivation: "", idealLife: "",
   deepQ1: "", deepQ2: "", deepQ3: "", deepQ4: "",
-  affirmationStyle: "You are", backgroundIntensity: "",
+  affirmationStyle: "You are", backgroundIntensity: "", pace: "slow",
 };
 
 function buildSteps(plan, isAdmin) {
@@ -102,6 +116,11 @@ function buildSteps(plan, isAdmin) {
     { id: "goal",       question: "What do you want to let go of or achieve?", type: "input",   placeholder: "e.g. Release anxiety and sleep deeply..." },
     { id: "program",    question: "Choose your program",                        type: "options", options: getProgramOptions(plan, isAdmin), lockedAction: isAdmin ? undefined : "payment" },
     { id: "voice",      question: "Choose your voice",                          type: "options", options: VOICES },
+    { id: "pace",       question: "Speaking pace",                              type: "options", options: [
+      { value: "slow",   icon: "◦", label: "Slow",   sub: "Deep and relaxed — more space between words" },
+      { value: "medium", icon: "◎", label: "Medium", sub: "Calm and clear" },
+      { value: "fast",   icon: "●", label: "Fast",   sub: "Focused and present" },
+    ]},
     { id: "background", question: "Choose your background sound",               type: "options", options: BACKGROUNDS },
     { id: "length",     question: "How long would you like your session?",      type: "options", options: getLengthOptions(plan, isAdmin), lockedAction: isAdmin ? undefined : "payment" },
     { id: "style",      question: "Choose your session style",                  type: "options", options: getStyleOptions(plan, isAdmin) },
@@ -403,6 +422,8 @@ function Footer({ onOpenModal, onHowToUse, onNav }) {
       <button style={linkStyle} onClick={() => nav("privacy")}>Privacy</button>
       <span style={{ color: "#8a879e", opacity: 0.4, fontSize: "0.68rem" }}>·</span>
       <button style={linkStyle} onClick={() => nav("cookies")}>Cookies</button>
+      <span style={{ color: "#8a879e", opacity: 0.4, fontSize: "0.68rem" }}>·</span>
+      <button style={linkStyle} onClick={() => nav("privacyData")}>Data handling</button>
       <span style={{ color: "#8a879e", opacity: 0.4, fontSize: "0.68rem" }}>·</span>
       <button style={linkStyle} onClick={() => onOpenModal("disclaimer")}>Clinical Disclaimer</button>
       {onHowToUse && <><span style={{ color: "#8a879e", opacity: 0.4, fontSize: "0.68rem" }}>·</span><button style={linkStyle} onClick={onHowToUse}>How to use</button></>}
@@ -958,8 +979,10 @@ export default function MindTranceformApp() {
   const [safetyReturn, setSafetyReturn]     = useState("home"); // "generate" | "home"
 
   // Quiz
-  const [step, setStep]     = useState(0);
-  const [form, setForm]     = useState(EMPTY_FORM);
+  const [step, setStep]       = useState(0);
+  const [form, setForm]       = useState(EMPTY_FORM);
+  const [fastEntryText, setFastEntryText] = useState("");
+  const [techniqueTooltipOpen, setTechniqueTooltipOpen] = useState(false);
   const [error, setError]   = useState("");
   const [generating, setGenerating] = useState(false);
   const [topicBlocked, setTopicBlocked] = useState(false);
@@ -1261,6 +1284,9 @@ useEffect(() => {
     } else if (path === "/cookies") {
       setView("cookies");
       setAuthReady(true);
+    } else if (path === "/privacy-data") {
+      setView("privacyData");
+      setAuthReady(true);
     }
 
     // Handle Stripe success redirect
@@ -1524,6 +1550,7 @@ useEffect(() => {
     setSafetyAccepted(true);
     setSafetyChecked(false);
     if (safetyReturn === "generate") generate();
+    else if (safetyReturn === "fastEntry") generateFastEntry(fastEntryText);
     else setView("home");
   }
 
@@ -1713,7 +1740,7 @@ useEffect(() => {
     }
   }
 
-  async function generate() {
+  async function generate(bodyOverrides = null) {
     // Admin always has unlimited access — skip all payment checks
     const adminUser = user?.email === import.meta.env.VITE_ADMIN_EMAIL;
     // Anonymous users never have a paid plan regardless of localStorage
@@ -1745,7 +1772,9 @@ useEffect(() => {
         idealLife: form.idealLife, deepQ1: form.deepQ1, deepQ2: form.deepQ2,
         deepQ3: form.deepQ3, deepQ4: form.deepQ4,
         affirmationStyle: form.affirmationStyle, backgroundIntensity: form.backgroundIntensity,
+        pace: form.pace || "slow",
         guestId: user?.is_anonymous ? localStorage.getItem("mt_guest_id") : undefined,
+        ...(bodyOverrides || {}),
       });
       const response = await fetch(`${BACKEND_URL}/generate-session`, {
         method: "POST",
@@ -1793,7 +1822,10 @@ useEffect(() => {
                 ? (ev.audioUrl || `${BACKEND_URL}/sessions/${ev.sessionId}/audio?token=${encodeURIComponent(token)}`)
                 : null;
               console.log("[generate/sse] sessionId:", ev.sessionId, "audioUnavailable:", ev.audioUnavailable, "audioUrl set:", !!audioUrl, "storage:", !!ev.audioUrl);
-              setResult({ script: ev.script, audioUrl, audioUnavailable: ev.audioUnavailable || !ev.sessionId });
+              setResult({ script: ev.script, audioUrl, audioUnavailable: ev.audioUnavailable || !ev.sessionId, inferred_program: ev.inferred_program || null, technique: ev.technique || null });
+              if (ev.inferred_program) {
+                setForm(f => ({ ...f, program: ev.inferred_program, voice: VOICE_RECOMMENDATION[ev.inferred_program] || DEFAULT_VOICE_RECOMMENDATION }));
+              }
               if (audioUrl) setAudioPulse(true);
               setView("result");
               if (newUsed === 1) setShowInstallBanner(true);
@@ -1838,6 +1870,25 @@ useEffect(() => {
     } finally {
       setGenerating(false);
     }
+  }
+
+  function generateFastEntry(text) {
+    generate({
+      name: form.name.trim() || undefined,
+      free_text_intent: text,
+      goal: text,
+      program: "Stress & Anxiety",
+      voice: "Female Calm",
+      background: "432 Hz",
+      length: "10",
+      style: "Gentle Meditation",
+      pace: "slow",
+      affirmationStyle: "You are",
+      backgroundIntensity: "Subtle",
+      personalization: "",
+      fears: "", motivation: "", idealLife: "",
+      deepQ1: "", deepQ2: "", deepQ3: "", deepQ4: "",
+    });
   }
 
   function goNext() {
@@ -2073,9 +2124,10 @@ useEffect(() => {
   ) : null;
 
   // ── LEGAL PAGES ──
-  if (view === "terms")   return <TermsPage   onBack={() => window.history.length > 1 ? window.history.back() : setView("landing")} />;
-  if (view === "privacy") return <PrivacyPage onBack={() => window.history.length > 1 ? window.history.back() : setView("landing")} />;
-  if (view === "cookies") return <CookiesPage onBack={() => window.history.length > 1 ? window.history.back() : setView("landing")} />;
+  if (view === "terms")       return <TermsPage       onBack={() => window.history.length > 1 ? window.history.back() : setView("landing")} />;
+  if (view === "privacy")     return <PrivacyPage     onBack={() => window.history.length > 1 ? window.history.back() : setView("landing")} />;
+  if (view === "cookies")     return <CookiesPage     onBack={() => window.history.length > 1 ? window.history.back() : setView("landing")} />;
+  if (view === "privacyData") return <PrivacyDataPage onBack={() => window.history.length > 1 ? window.history.back() : setView("home")} />;
 
   // ── LANDING ──
   if (view === "landing") {
@@ -2547,6 +2599,49 @@ useEffect(() => {
               Personalized {form.program} · {form.voice}
             </div>
             <div style={S.tagRow}>{tags.map((t) => <div key={t} style={S.tag}>{t}</div>)}</div>
+            {result.inferred_program && (
+              <div style={{ fontSize: "0.82rem", color: "#8a879e", textAlign: "center", marginBottom: "1rem", lineHeight: 1.6 }}>
+                We built you a <strong style={{ color: "#e8e6f0" }}>{result.inferred_program.toLowerCase()}</strong> session.{" "}
+                <button
+                  style={{ background: "none", border: "none", color: "#a8d8c8", cursor: "pointer", textDecoration: "underline", fontFamily: "inherit", fontSize: "inherit", padding: 0 }}
+                  onClick={() => { setStep(0); setForm(EMPTY_FORM); setError(""); setResult(null); setView("quiz"); }}
+                >
+                  Set up my profile for better sessions →
+                </button>
+              </div>
+            )}
+            {result.technique && (
+              <div style={{ marginBottom: "1rem", position: "relative" }}>
+                <button
+                  onClick={() => setTechniqueTooltipOpen(v => !v)}
+                  style={{
+                    display: "inline-flex", alignItems: "center", gap: "0.4rem",
+                    background: "rgba(201,168,216,0.08)", border: "0.5px solid rgba(201,168,216,0.3)",
+                    borderRadius: 20, padding: "0.3rem 0.75rem",
+                    color: "#c9a8d8", fontSize: "0.75rem", cursor: "pointer",
+                    fontFamily: "inherit", letterSpacing: "0.03em",
+                  }}
+                >
+                  {result.technique}
+                </button>
+                {techniqueTooltipOpen && (
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 0.5rem)", left: 0, right: 0,
+                    background: "rgba(15,17,35,0.97)", border: "0.5px solid rgba(201,168,216,0.25)",
+                    borderRadius: 10, padding: "0.85rem 1rem",
+                    fontSize: "0.78rem", color: "#c8c5d8", lineHeight: 1.65, zIndex: 10,
+                  }}>
+                    {TECHNIQUE_TOOLTIPS[result.technique] || result.technique}
+                    <button
+                      onClick={() => setTechniqueTooltipOpen(false)}
+                      style={{ display: "block", marginTop: "0.5rem", background: "none", border: "none", color: "#8a879e", cursor: "pointer", fontSize: "0.72rem", fontFamily: "inherit", padding: 0 }}
+                    >
+                      ✕ Close
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             {result.audioUrl && (
               <div style={{
                 background: "rgba(168,216,200,0.06)",
@@ -3833,6 +3928,63 @@ useEffect(() => {
     );
   }
 
+  // ── FAST ENTRY ──
+  if (view === "fastEntry") {
+    return (
+      <div style={S.root}>
+        <StarField />
+        <div style={S.wrap}>
+          <Logo brand={whiteLabel} />
+          <div style={S.card}>
+            <div style={S.stepQ}>What's going on right now?</div>
+            <div style={{ fontSize: "0.82rem", color: "#8a879e", lineHeight: 1.65, marginBottom: "1.25rem", marginTop: "-0.5rem" }}>
+              One sentence is enough. We'll handle the rest.
+            </div>
+            {!form.name.trim() && (
+              <input
+                style={{ ...S.input, marginBottom: "0.75rem" }}
+                type="text"
+                placeholder="Your name (optional)"
+                value={form.name}
+                onChange={(e) => { updateForm("name", e.target.value); }}
+              />
+            )}
+            <textarea
+              style={{ ...S.input, minHeight: 100, resize: "vertical", lineHeight: 1.55, overflow: "auto" }}
+              placeholder="e.g. I can't stop thinking about tomorrow. I just need to wind down."
+              maxLength={280}
+              value={fastEntryText}
+              autoFocus
+              onChange={(e) => setFastEntryText(e.target.value)}
+            />
+            <div style={{ fontSize: "0.72rem", color: "#8a879e", textAlign: "right", marginTop: "0.3rem", marginBottom: "0.5rem" }}>
+              {fastEntryText.length}/280
+            </div>
+            <div style={{ fontSize: "0.72rem", color: "#8a879e", textAlign: "center", marginBottom: "0.75rem" }}>
+              Your answers are used only to personalize this session.{" "}
+              <a href="/privacy-data" style={{ color: "#8a879e" }}>How we use your data →</a>
+            </div>
+            <div style={S.row}>
+              <button style={S.btn} onClick={() => setView("quiz")}>← Set it up myself</button>
+              <button
+                style={{ ...S.btnPrimary, opacity: fastEntryText.trim().length < 10 ? 0.5 : 1 }}
+                disabled={fastEntryText.trim().length < 10}
+                onClick={() => {
+                  if (!safetyAccepted) { setSafetyReturn("fastEntry"); setView("safety"); return; }
+                  generateFastEntry(fastEntryText);
+                }}
+              >
+                Build my session →
+              </button>
+            </div>
+          </div>
+          {error && <div style={S.errorBox}>⚠ {error}</div>}
+          {footer}
+        </div>
+      </div>
+    );
+  }
+
   // ── QUIZ ──
   const current = steps[step];
   const pct = (step / steps.length) * 100;
@@ -3883,6 +4035,10 @@ useEffect(() => {
               </div>
               <div style={{ fontSize: "0.72rem", color: "#8a879e", textAlign: "center", opacity: 0.7, marginTop: "0.25rem" }}>
                 Skip if nothing comes to mind — even one line shapes the session.
+              </div>
+              <div style={{ fontSize: "0.72rem", color: "#8a879e", textAlign: "center", marginTop: "0.5rem" }}>
+                Your answers are used only to personalize this session.{" "}
+                <button style={{ background: "none", border: "none", color: "#8a879e", cursor: "pointer", textDecoration: "underline", fontFamily: "inherit", fontSize: "inherit", padding: 0 }} onClick={() => setView("privacyData")}>How is this used?</button>
               </div>
             </>
           ) : current.id === "voice" ? (
@@ -3952,6 +4108,11 @@ useEffect(() => {
               {step < steps.length - 1 ? "Continue →" : "Generate My Session ✦"}
             </button>
           </div>
+          {step === 0 && (
+            <button style={{ ...S.resetBtn, marginTop: "0.75rem" }} onClick={() => { setFastEntryText(""); setView("fastEntry"); }}>
+              Skip setup — just tell us what's going on →
+            </button>
+          )}
         </div>
         {error && <div style={S.errorBox}>⚠ {error}</div>}
         {footer}
