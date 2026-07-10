@@ -776,7 +776,7 @@ function OptionList({ options, selected, onSelect, onLockedSelect, onPreview, pr
   );
 }
 
-function Logo({ sub = false, brand = null }) {
+function Logo({ sub = false, brand = null, hero = false }) {
   if (brand) {
     return (
       <div style={S.logo}>
@@ -791,7 +791,11 @@ function Logo({ sub = false, brand = null }) {
   }
   return (
     <div style={S.logo}>
-      <h1 style={S.h1}>Mind <span style={S.h1span}>Tranceform</span></h1>
+      <img
+        src={hero ? "/logo-hero.png" : "/logo-header.png"}
+        alt="Mind Tranceform"
+        style={{ maxWidth: hero ? "min(420px, 100%)" : "min(360px, 100%)", height: "auto", display: "block", margin: "0 auto" }}
+      />
       {sub && <p style={S.logoSub}>Personalized Meditation &amp; Hypnosis</p>}
     </div>
   );
@@ -2164,7 +2168,7 @@ useEffect(() => {
         <StarField />
         <div style={S.wrap}>
           {/* ── Hero ── */}
-          <Logo sub brand={whiteLabel} />
+          <Logo hero brand={whiteLabel} />
           <div style={{ textAlign: "center", padding: "0.5rem 0 2.5rem" }}>
             <div style={{ fontSize: "clamp(1.5rem, 5vw, 2rem)", fontWeight: 300, lineHeight: 1.35, color: "#e8e6f0", marginBottom: "1rem", letterSpacing: "0.02em" }}>
               Your name. Your goal.<br />Your session.
