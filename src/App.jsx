@@ -4,6 +4,7 @@ import { TermsPage } from "./TermsPage.jsx";
 import { PrivacyPage } from "./PrivacyPage.jsx";
 import { CookiesPage } from "./CookiesPage.jsx";
 import { PrivacyDataPage } from "./PrivacyDataPage.jsx";
+import { ClinicalAssessmentScreen, ProgressScreen, SafetyResourcesCard } from "./ClinicalAssessments.jsx";
 
 const BACKEND_URL = "https://mindtranceform-backend.onrender.com";
 const supabase = createClient(
@@ -140,7 +141,7 @@ function buildSteps(plan, isAdmin) {
 }
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
-const S = {
+export const S = {
   root: {
     minHeight: "100vh",
     background: "#07091a",
@@ -261,7 +262,7 @@ const S = {
 };
 
 // ─── COMPONENTS ───────────────────────────────────────────────────────────────
-function StarField() {
+export function StarField() {
   return (
     <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0 }}>
       {Array.from({ length: 70 }).map((_, i) => (
@@ -776,7 +777,7 @@ function OptionList({ options, selected, onSelect, onLockedSelect, onPreview, pr
   );
 }
 
-function Logo({ sub = false, brand = null, hero = false }) {
+export function Logo({ sub = false, brand = null, hero = false }) {
   if (brand) {
     return (
       <div style={S.logo}>
@@ -1077,6 +1078,13 @@ export default function MindTranceformApp() {
   // PWA install prompt
   const [deferredInstall, setDeferredInstall] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
+
+  // PHQ-9 / GAD-7 clinical assessments + progress
+  const [caStatus, setCaStatus]                     = useState(null); // GET /clinical-assessments/status response
+  const [caBannerDismissed, setCaBannerDismissed]   = useState(false);
+  const [safetyCardEvent, setSafetyCardEvent]       = useState(null); // { id, assessment_id, shown_at } | null
+  const [progressData, setProgressData]             = useState(null);
+  const [progressLoading, setProgressLoading]       = useState(false);
 
   // Blog
   const [blogPosts, setBlogPosts]         = useState([]);
@@ -1426,6 +1434,26 @@ useEffect(() => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // PHQ-9/GAD-7: check for a pending (unacknowledged) item-9 safety event on
+  // login, and again whenever the tab regains focus/visibility — this is how
+  // "re-opening the app re-shows the card if not acknowledged" is satisfied
+  // in a web app. Also refreshes baseline/re-offer status for the assessment banner.
+  useEffect(() => {
+    if (!user?.email) return;
+    checkSafetyPending();
+    fetchClinicalStatus();
+    function onVisible() {
+      if (document.visibilityState === "visible") checkSafetyPending();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   async function getToken() {
     const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token;
@@ -1455,6 +1483,81 @@ useEffect(() => {
         setPlan(null);
       }
     } catch {}
+  }
+
+  // ─── PHQ-9 / GAD-7 clinical assessments ────────────────────────────────────
+  async function fetchClinicalStatus() {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/clinical-assessments/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) setCaStatus(data);
+    } catch (e) {
+      console.error("[clinical-assessments/status] error:", e.message);
+    }
+  }
+
+  // Checks for an unacknowledged item-9 safety event and shows the resources
+  // card if one exists. Called on login and whenever the tab regains focus,
+  // so the card re-appears on "re-opening the app" until acknowledged.
+  async function checkSafetyPending() {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/clinical-assessments/safety-pending`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success && data.pending) setSafetyCardEvent(data.event);
+    } catch (e) {
+      console.error("[clinical-assessments/safety-pending] error:", e.message);
+    }
+  }
+
+  async function acknowledgeSafetyEvent() {
+    if (!safetyCardEvent) return;
+    const token = await getToken();
+    const res = await fetch(`${BACKEND_URL}/clinical-assessments/safety-events/${safetyCardEvent.id}/acknowledge`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || "acknowledge_failed");
+    setSafetyCardEvent(null);
+  }
+
+  // Submits one instrument's answers. Returns the backend response so the
+  // caller (ClinicalAssessmentScreen) can react to requiresSafetyAck.
+  async function submitClinicalAssessment(instrument, responses) {
+    const token = await getToken();
+    const res = await fetch(`${BACKEND_URL}/clinical-assessments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ instrument, responses }),
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || "submit_failed");
+    if (data.requiresSafetyAck && data.safetyEventId) {
+      setSafetyCardEvent({ id: data.safetyEventId, assessment_id: data.id, shown_at: new Date().toISOString() });
+    }
+    fetchClinicalStatus(); // refresh baseline/re-offer status for both instruments
+    return data;
+  }
+
+  async function fetchProgress() {
+    setProgressLoading(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BACKEND_URL}/progress`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.success) setProgressData(data);
+    } catch (e) {
+      console.error("[progress] error:", e.message);
+    }
+    setProgressLoading(false);
   }
 
   async function handleAuth(e) {
@@ -2083,7 +2186,12 @@ useEffect(() => {
 
   if (!authReady) return null;
 
-  const modal = legalModal ? <LegalModal type={legalModal} onClose={() => setLegalModal(null)} /> : null;
+  const modal = (
+    <>
+      {legalModal && <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />}
+      {safetyCardEvent && <SafetyResourcesCard onAcknowledge={acknowledgeSafetyEvent} />}
+    </>
+  );
   const footer = <Footer onOpenModal={setLegalModal} onNav={setView} onHowToUse={() => { setSafetyReturn("home"); setView("safety"); }} />;
 
   const topicBlockedModal = topicBlocked ? (
@@ -2952,6 +3060,32 @@ useEffect(() => {
     );
   }
 
+  // ── PHQ-9 / GAD-7 CLINICAL ASSESSMENT ──
+  if (view === "clinicalAssessment") return (
+    <ClinicalAssessmentScreen
+      content={caStatus || { stem: "", answerScale: [], phq9Items: [], gad7Items: [], attribution: "" }}
+      caStatus={caStatus}
+      awaitingSafetyAck={!!safetyCardEvent}
+      onSubmit={submitClinicalAssessment}
+      onSkip={() => setView("home")}
+      onDone={(dest) => { setCaBannerDismissed(true); if (dest === "progress") { setView("progress"); fetchProgress(); } else { setView("home"); } }}
+      footer={footer}
+      modal={modal}
+    />
+  );
+
+  // ── PROGRESS ──
+  if (view === "progress") return (
+    <ProgressScreen
+      data={progressData}
+      loading={progressLoading}
+      onBack={() => setView("home")}
+      onStartAssessment={() => setView("clinicalAssessment")}
+      footer={footer}
+      modal={modal}
+    />
+  );
+
   // ── SESSIONS LIST ──
   if (view === "sessions") return (
     <div style={S.root}>
@@ -3603,6 +3737,23 @@ useEffect(() => {
               ✦ {welcomeMsg}
             </div>
           )}
+          {!user?.is_anonymous && caStatus && !caBannerDismissed && (caStatus.phq9.shouldOffer || caStatus.gad7.shouldOffer) && (
+            <div style={{ ...S.infoBox, marginBottom: "1.25rem", textAlign: "center", borderColor: "rgba(168,216,200,0.35)" }}>
+              <div style={{ fontSize: "0.87rem", color: "#e8e6f0", marginBottom: "0.65rem" }}>
+                {(!caStatus.phq9.hasTaken && !caStatus.gad7.hasTaken)
+                  ? "Take a quick 2-minute wellness check-in to start tracking your progress"
+                  : "Time for your 2-week wellness check-in"}
+              </div>
+              <button
+                style={{ ...S.btnPrimary, width: "100%", padding: "0.65rem", marginBottom: "0.45rem", fontSize: "0.9rem" }}
+                onClick={() => setView("clinicalAssessment")}
+              >Start check-in →</button>
+              <button
+                style={{ fontSize: "0.74rem", color: "#8a879e", background: "none", border: "none", cursor: "pointer", padding: "0.15rem" }}
+                onClick={() => setCaBannerDismissed(true)}
+              >Not now</button>
+            </div>
+          )}
           <div style={{ fontSize: "1.2rem", fontWeight: 300, marginBottom: "0.3rem" }}>
             {user?.is_anonymous ? "Guest Session" : `Welcome back${user?.email ? `, ${user.email.split("@")[0]}` : ""}`}
           </div>
@@ -3616,6 +3767,11 @@ useEffect(() => {
           <button style={{ ...S.btn, width: "100%", padding: "1rem", marginBottom: "0.75rem" }} onClick={() => { setView("sessions"); fetchSessions(); }}>
             My Sessions
           </button>
+          {!user?.is_anonymous && (
+            <button style={{ ...S.btn, width: "100%", padding: "1rem", marginBottom: "0.75rem" }} onClick={() => { setView("progress"); fetchProgress(); }}>
+              Progress
+            </button>
+          )}
           {user?.email === import.meta.env.VITE_ADMIN_EMAIL && (
             <button style={{ ...S.btn, width: "100%", padding: "1rem", marginBottom: "0.75rem" }} onClick={() => { window.history.pushState({}, "", "/admin/content"); setView("adminContent"); }}>
               Admin Dashboard
