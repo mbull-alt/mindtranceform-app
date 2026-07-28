@@ -4,6 +4,7 @@ import { TermsPage } from "./TermsPage.jsx";
 import { PrivacyPage } from "./PrivacyPage.jsx";
 import { CookiesPage } from "./CookiesPage.jsx";
 import { PrivacyDataPage } from "./PrivacyDataPage.jsx";
+import { ClinicalDisclaimerPage } from "./ClinicalDisclaimerPage.jsx";
 import { ClinicalAssessmentScreen, ProgressScreen, SafetyResourcesCard } from "./ClinicalAssessments.jsx";
 
 const BACKEND_URL = "https://mindtranceform-backend.onrender.com";
@@ -367,6 +368,19 @@ const DISCLAIMER_TEXT = [
   { h2: "Questions?" },
   { p: "support@mindtranceformapp.com" },
 ];
+
+// Single source of truth for which URL paths are cold-loadable legal pages and which
+// `view` value each one maps to. Used both by the initial mount routing (sets the view
+// from the URL) and by the auth-resolution callbacks below (so a later async auth result
+// never clobbers a legal page the user/crawler directly loaded — see the isLegalPath
+// checks near the getSession().then() and onAuthStateChange handlers).
+const LEGAL_VIEWS_BY_PATH = {
+  "/terms": "terms",
+  "/privacy": "privacy",
+  "/cookies": "cookies",
+  "/privacy-data": "privacyData",
+  "/clinical-disclaimer": "clinicalDisclaimer",
+};
 
 function LegalModal({ type, onClose }) {
   const blocks = type === "privacy" ? PRIVACY_TEXT : type === "disclaimer" ? DISCLAIMER_TEXT : TERMS_TEXT;
@@ -1287,17 +1301,11 @@ useEffect(() => {
       setBlogPost({ slug, loading: true });
       setView("blogPost");
       setAuthReady(true);
-    } else if (path === "/terms") {
-      setView("terms");
-      setAuthReady(true);
-    } else if (path === "/privacy") {
-      setView("privacy");
-      setAuthReady(true);
-    } else if (path === "/cookies") {
-      setView("cookies");
-      setAuthReady(true);
-    } else if (path === "/privacy-data") {
-      setView("privacyData");
+    } else if (LEGAL_VIEWS_BY_PATH[path]) {
+      // Cold-load a legal page (privacy, terms, cookies, privacy-data, clinical-disclaimer)
+      // straight from the URL — required for Google Play / app-store review crawlers,
+      // which hit these URLs directly with no prior app session.
+      setView(LEGAL_VIEWS_BY_PATH[path]);
       setAuthReady(true);
     }
 
@@ -1327,7 +1335,11 @@ useEffect(() => {
         const currentPath = window.location.pathname;
         const isRootPath = currentPath === "/" || currentPath === "";
         const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
-        if (currentPath === "/admin/content") {
+        if (LEGAL_VIEWS_BY_PATH[currentPath]) {
+          // Legal page cold-load: the mount effect above already set the correct view
+          // from the URL. Don't let the auth-session result (guest or logged-in) knock
+          // the user/crawler off the page they directly loaded.
+        } else if (currentPath === "/admin/content") {
           setView(session?.user?.email === adminEmail ? "adminContent" : (session?.user ? "home" : "landing"));
         } else if (session?.user) {
           // On cold start, show home + "Resume" prompt rather than silently navigating.
@@ -1374,7 +1386,11 @@ useEffect(() => {
       if (event === "SIGNED_IN") {
         const currentPath = window.location.pathname;
         const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
-        if (currentPath === "/admin/content" && u?.email === adminEmail) {
+        if (LEGAL_VIEWS_BY_PATH[currentPath]) {
+          // Same reasoning as the getSession().then() guard above: a SIGNED_IN event
+          // (e.g. token restore firing after cold mount) must not knock the user off
+          // a directly-loaded legal page.
+        } else if (currentPath === "/admin/content" && u?.email === adminEmail) {
           setView("adminContent");
         } else {
           // On SIGNED_IN (cold start or re-auth), check for a saved session.
@@ -2240,6 +2256,7 @@ useEffect(() => {
   if (view === "privacy")     return <PrivacyPage     onBack={() => window.history.length > 1 ? window.history.back() : setView("landing")} />;
   if (view === "cookies")     return <CookiesPage     onBack={() => window.history.length > 1 ? window.history.back() : setView("landing")} />;
   if (view === "privacyData") return <PrivacyDataPage onBack={() => window.history.length > 1 ? window.history.back() : setView("home")} />;
+  if (view === "clinicalDisclaimer") return <ClinicalDisclaimerPage onBack={() => window.history.length > 1 ? window.history.back() : setView("landing")} />;
 
   // ── LANDING ──
   if (view === "landing") {
