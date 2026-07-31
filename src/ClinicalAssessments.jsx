@@ -132,17 +132,37 @@ function computeInitialPhase(caStatus) {
 // safety-card state) — this screen will not advance to GAD-7 until that
 // clears, and the SafetyResourcesCard overlay itself blocks all interaction
 // underneath in the meantime.
-export function ClinicalAssessmentScreen({ content, caStatus, awaitingSafetyAck, onSubmit, onDone, onSkip, footer, modal }) {
-  const [phase, setPhase] = useState(() => computeInitialPhase(caStatus));
-  const [qIndex, setQIndex] = useState(0);
-  const [phq9Answers, setPhq9Answers] = useState({});
-  const [gad7Answers, setGad7Answers] = useState({});
+export function ClinicalAssessmentScreen({ content, caStatus, awaitingSafetyAck, onSubmit, onDone, onSkip, footer, modal, initialDraft, onProgress }) {
+  // initialDraft (if present) resumes an in-progress attempt saved before the tab
+  // was backgrounded/reloaded — see the mt_session_state draft mechanism in App.jsx.
+  // Only phase/qIndex/answers are resumable; a submission already in flight when the
+  // tab died still has to be re-answered, which is an acceptable, rare edge case.
+  const [phase, setPhase] = useState(() => initialDraft?.phase ?? computeInitialPhase(caStatus));
+  const [qIndex, setQIndex] = useState(() => initialDraft?.qIndex ?? 0);
+  const [phq9Answers, setPhq9Answers] = useState(() => initialDraft?.phq9Answers ?? {});
+  const [gad7Answers, setGad7Answers] = useState(() => initialDraft?.gad7Answers ?? {});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
-  const [pendingAdvance, setPendingAdvance] = useState(false); // true while waiting on safety ack before moving to GAD-7
+  // true while waiting on safety ack before moving to GAD-7 — restored from the draft too,
+  // so a resume that lands during the brief post-submit/pre-ack gap still advances once
+  // the re-shown safety card (driven by the parent's independent safety-pending poll) is acknowledged.
+  const [pendingAdvance, setPendingAdvance] = useState(() => initialDraft?.pendingAdvance ?? false);
   const [lastResult, setLastResult] = useState(null); // { instrument, totalScore, severityBand } for the "done" screen
 
   const isBaseline = !caStatus?.phq9?.hasTaken && !caStatus?.gad7?.hasTaken;
+
+  // Report in-progress draft state up to the parent on every change so it can be
+  // persisted (mt_session_state) if the tab backgrounds mid-assessment. Nothing to
+  // resume once we're back on the intro screen or finished.
+  useEffect(() => {
+    if (!onProgress) return;
+    if (phase === "phq9" || phase === "gad7") {
+      onProgress({ phase, qIndex, phq9Answers, gad7Answers, pendingAdvance });
+    } else {
+      onProgress(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, qIndex, phq9Answers, gad7Answers, pendingAdvance]);
 
   // Once the safety card is acknowledged (awaitingSafetyAck flips true → false),
   // continue on to GAD-7 if it's due, otherwise finish.
@@ -275,6 +295,13 @@ export function ClinicalAssessmentScreen({ content, caStatus, awaitingSafetyAck,
           <button style={S.btn} onClick={qIndex === 0 ? onSkip : goBackQuestion} disabled={submitting}>
             {qIndex === 0 ? "Skip for now" : "← Back"}
           </button>
+          {/* Explicit forward action on the last question after a failed save —
+              don't rely on the user realizing that re-tapping the same answer retries. */}
+          {submitError && qIndex === items.length - 1 && answers[item.id] !== undefined && (
+            <button style={S.btnPrimary} onClick={() => submitInstrument(instrument, answers)} disabled={submitting}>
+              Try again →
+            </button>
+          )}
         </div>
         {submitting && <div style={{ fontSize: "0.78rem", color: "#8a879e", textAlign: "center", marginTop: "0.75rem" }}>Saving…</div>}
         <div style={{ fontSize: "0.68rem", color: "#8a879e", lineHeight: 1.6, marginTop: "1.5rem", textAlign: "center" }}>
@@ -293,6 +320,13 @@ export function ClinicalAssessmentScreen({ content, caStatus, awaitingSafetyAck,
       <div style={{ fontSize: "0.9rem", color: "#c8c5d8", lineHeight: 1.7, marginBottom: "1.5rem" }}>
         Your answers are saved. We'll check in again in a couple of weeks so you can see how things are trending.
       </div>
+      {lastResult && (
+        <div style={{ ...S.infoBox, marginBottom: "1.5rem" }}>
+          <div style={{ fontSize: "0.85rem", color: "#e8e6f0" }}>
+            {INSTRUMENT_LABEL[lastResult.instrument]}: <span style={{ color: "#a8d8c8", textTransform: "capitalize" }}>{lastResult.severityBand}</span>
+          </div>
+        </div>
+      )}
       <div style={S.row}>
         <button style={S.btn} onClick={() => onDone("home")}>Back to home</button>
         <button style={S.btnPrimary} onClick={() => onDone("progress")}>View your progress →</button>

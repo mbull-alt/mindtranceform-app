@@ -1097,6 +1097,12 @@ export default function MindTranceformApp() {
   const [caStatus, setCaStatus]                     = useState(null); // GET /clinical-assessments/status response
   const [caBannerDismissed, setCaBannerDismissed]   = useState(false);
   const [safetyCardEvent, setSafetyCardEvent]       = useState(null); // { id, assessment_id, shown_at } | null
+  // In-progress assessment draft (phase/qIndex/answers), reported up by
+  // ClinicalAssessmentScreen's onProgress. Null when on the intro/done screen or not
+  // in the flow at all. Persisted via mt_session_state so a screen-lock/backgrounded-tab
+  // reload can resume mid-assessment instead of dropping the user to home — same
+  // mechanism already used for session playback resume.
+  const [caDraft, setCaDraft]                       = useState(null);
   const [progressData, setProgressData]             = useState(null);
   const [progressLoading, setProgressLoading]       = useState(false);
 
@@ -1161,20 +1167,20 @@ export default function MindTranceformApp() {
   // Keep sessionStateRef current so the pagehide/visibilitychange handler always sees
   // the latest state without needing to re-register the listeners.
   useEffect(() => {
-    sessionStateRef.current = { view, result, selectedSession, form, user };
-  }, [view, result, selectedSession, form, user]);
+    sessionStateRef.current = { view, result, selectedSession, form, user, caDraft };
+  }, [view, result, selectedSession, form, user, caDraft]);
 
   // Persist the active session to localStorage whenever the app goes to background
   // (screen lock, tab switch, PWA suspend) and restore it on resume so the session
   // is not lost — equivalent to AppState + AsyncStorage in React Native.
   useEffect(() => {
-    const RESTORABLE = new Set(["result", "sessionDetail", "home", "sessions", "generate", "account"]);
+    const RESTORABLE = new Set(["result", "sessionDetail", "home", "sessions", "generate", "account", "clinicalAssessment"]);
     function saveSessionState() {
-      const { view: v, result: r, selectedSession: ss, form: f, user: u } = sessionStateRef.current;
+      const { view: v, result: r, selectedSession: ss, form: f, user: u, caDraft: cd } = sessionStateRef.current;
       if (!u || !RESTORABLE.has(v)) return;
       try {
         localStorage.setItem("mt_session_state", JSON.stringify({
-          view: v, result: r, selectedSession: ss, form: f, savedAt: Date.now(),
+          view: v, result: r, selectedSession: ss, form: f, caDraft: cd, savedAt: Date.now(),
         }));
       } catch {}
     }
@@ -1200,18 +1206,19 @@ useEffect(() => {
         localStorage.removeItem("mt_session_state");
         return;
       }
-      const restorable = new Set(["sessionDetail", "result"]);
+      const restorable = new Set(["sessionDetail", "result", "clinicalAssessment"]);
       if (!restorable.has(saved.view)) return;
 
       // If we're already on the correct view with a session loaded, skip the restore —
       // this prevents the scrubber's visibilitychange from reloading the audio src.
       const current = sessionStateRef.current;
-      if (current.view === saved.view && (current.result || current.selectedSession)) return;
+      if (current.view === saved.view && (current.result || current.selectedSession || current.caDraft)) return;
 
       localStorage.removeItem("mt_session_state");
       if (saved.result)          setResult(saved.result);
       if (saved.selectedSession) setSelectedSession(saved.selectedSession);
       if (saved.form)            setForm(saved.form);
+      if (saved.caDraft)         setCaDraft(saved.caDraft);
       setView(saved.view);
     } catch {}
   }
@@ -1351,7 +1358,7 @@ useEffect(() => {
             if (raw) {
               const saved = JSON.parse(raw);
               localStorage.removeItem("mt_session_state");
-              const restorable = new Set(["sessionDetail", "result"]);
+              const restorable = new Set(["sessionDetail", "result", "clinicalAssessment"]);
               if (saved.savedAt && Date.now() - saved.savedAt < RESTORE_TTL_MS && restorable.has(saved.view)) {
                 setPendingResume(saved);
               }
@@ -1403,7 +1410,7 @@ useEffect(() => {
             const raw = localStorage.getItem("mt_session_state");
             if (raw) {
               const saved = JSON.parse(raw);
-              const restorable = new Set(["sessionDetail", "result"]);
+              const restorable = new Set(["sessionDetail", "result", "clinicalAssessment"]);
               if (saved.savedAt && Date.now() - saved.savedAt < RESTORE_TTL_MS && restorable.has(saved.view)) {
                 localStorage.removeItem("mt_session_state");
                 setPendingResume(saved);
@@ -3084,8 +3091,10 @@ useEffect(() => {
       caStatus={caStatus}
       awaitingSafetyAck={!!safetyCardEvent}
       onSubmit={submitClinicalAssessment}
-      onSkip={() => setView("home")}
-      onDone={(dest) => { setCaBannerDismissed(true); if (dest === "progress") { setView("progress"); fetchProgress(); } else { setView("home"); } }}
+      onSkip={() => { setCaDraft(null); setView("home"); }}
+      onDone={(dest) => { setCaDraft(null); setCaBannerDismissed(true); if (dest === "progress") { setView("progress"); fetchProgress(); } else { setView("home"); } }}
+      initialDraft={caDraft}
+      onProgress={setCaDraft}
       footer={footer}
       modal={modal}
     />
@@ -3739,6 +3748,7 @@ useEffect(() => {
                   if (pendingResume.result)          setResult(pendingResume.result);
                   if (pendingResume.selectedSession) setSelectedSession(pendingResume.selectedSession);
                   if (pendingResume.form)            setForm(pendingResume.form);
+                  if (pendingResume.caDraft)         setCaDraft(pendingResume.caDraft);
                   setView(pendingResume.view);
                   setPendingResume(null);
                 }}
