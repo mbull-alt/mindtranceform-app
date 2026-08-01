@@ -256,6 +256,14 @@ export const S = {
     cursor: "pointer", textDecoration: "underline", fontFamily: "inherit",
     display: "block", margin: "1.25rem auto 0",
   },
+  // Button reset for inline text-link actions (e.g. "Terms of Service" inside a sentence) —
+  // keeps the existing visual look of a clickable underlined span while giving it real
+  // <button> keyboard/focus/screen-reader semantics for free (WCAG 2.1.1, 4.1.2).
+  linkButton: {
+    background: "none", border: "none", padding: 0, margin: 0,
+    color: "#a8d8c8", textDecoration: "underline", cursor: "pointer",
+    font: "inherit", display: "inline",
+  },
   freeTag: {
     fontSize: "0.72rem", color: "#a8d8c8", letterSpacing: "0.1em",
     textAlign: "center", marginTop: "1rem",
@@ -384,9 +392,24 @@ const LEGAL_VIEWS_BY_PATH = {
 
 function LegalModal({ type, onClose }) {
   const blocks = type === "privacy" ? PRIVACY_TEXT : type === "disclaimer" ? DISCLAIMER_TEXT : TERMS_TEXT;
+  // Move focus onto the close button when the dialog opens. This is required for the
+  // Escape handler below to ever fire — Escape only bubbles from whatever element
+  // currently has focus, and without this, focus stays on whatever triggered the modal
+  // (outside this DOM subtree entirely), so the keydown handler on the backdrop would
+  // never see it. This is the WAI-ARIA APG modal dialog pattern's initial-focus
+  // requirement, not the general-page autoFocus antipattern removed elsewhere in this
+  // pass — a dialog stealing focus from its own trigger on open is exactly correct.
+  const closeBtnRef = useRef(null);
+  useEffect(() => { closeBtnRef.current?.focus(); }, []);
+  // Backdrop: click-to-dismiss is a mouse-only convenience. Keyboard/screen-reader users
+  // have two full equivalents instead — Escape (handled below) and a real, focusable close
+  // button inside the dialog — so this div is deliberately left out of the tab order rather
+  // than turned into a nonsensical full-viewport button, per WAI-ARIA APG guidance for
+  // dismissible dialogs.
   return (
     <div
       onClick={onClose}
+      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 1000,
         display: "flex", alignItems: "flex-start", justifyContent: "center",
@@ -395,6 +418,8 @@ function LegalModal({ type, onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
         style={{
           background: "#0d1030", border: "0.5px solid rgba(255,255,255,0.12)",
           borderRadius: 20, padding: "2rem 1.75rem", maxWidth: 540, width: "100%",
@@ -402,6 +427,7 @@ function LegalModal({ type, onClose }) {
         }}
       >
         <button
+          ref={closeBtnRef}
           onClick={onClose}
           style={{
             position: "absolute", top: "1rem", right: "1rem",
@@ -740,25 +766,31 @@ function BackgroundPlayer({ background, intensity }) {
 
 function OptionList({ options, selected, onSelect, onLockedSelect, onPreview, previewLoading, previewPlaying }) {
   return (
-    <div style={S.optionsList}>
+    <div style={S.optionsList} role="radiogroup">
       {options.map((o) => {
         const sel = selected === o.value;
         const locked = !!o.locked;
         const hasLockedAction = locked && !!onLockedSelect;
         const isLoadingPreview = previewLoading === o.value;
         const isPlayingPreview = previewPlaying === o.value;
+        function handleSelect() {
+          if (locked) { if (hasLockedAction) onLockedSelect(); }
+          else onSelect(o.value);
+        }
         return (
           <div
             key={o.value}
+            role="radio"
+            aria-checked={sel && !locked}
+            aria-disabled={locked && !hasLockedAction}
+            tabIndex={locked && !hasLockedAction ? -1 : 0}
             style={{
               ...S.option(sel && !locked),
               opacity: locked ? 0.5 : 1,
               cursor: locked ? (hasLockedAction ? "pointer" : "not-allowed") : "pointer",
             }}
-            onClick={() => {
-              if (locked) { if (hasLockedAction) onLockedSelect(); }
-              else onSelect(o.value);
-            }}
+            onClick={handleSelect}
+            onKeyDown={(e) => { if ((e.key === "Enter" || e.key === " ") && !(locked && !hasLockedAction)) { e.preventDefault(); handleSelect(); } }}
           >
             <div style={S.optionIcon}>{o.icon}</div>
             <div style={{ flex: 1 }}>
@@ -897,8 +929,13 @@ function SessionAudioPlayer({ src, onPlay, onPause, onError, noteText }) {
 
   return (
     <div style={{ marginBottom: "1.25rem" }}>
+      {/* Prerecorded, audio-only spoken content (no video/visual track). WCAG 1.2.1's text-
+          alternative requirement is met by the full session script rendered as visible text
+          in the same view (see the "Transcript" section below), not by a <track> file — that
+          mechanism is for synchronized captions on video or audio-with-visual content. */}
       <audio
         ref={ref}
+        aria-label="Session audio"
         playsInline
         preload="auto"
         style={{ display: "none" }}
@@ -1005,6 +1042,7 @@ export default function MindTranceformApp() {
   const [error, setError]   = useState("");
   const [generating, setGenerating] = useState(false);
   const [topicBlocked, setTopicBlocked] = useState(false);
+  const topicBlockedBtnRef = useRef(null);
   const [result, setResult] = useState(null);
   const [genStep, setGenStep] = useState(0);
   const [sseChunk, setSseChunk] = useState(0);
@@ -1139,6 +1177,14 @@ export default function MindTranceformApp() {
 
   // Fetch public testimonials on first load
   useEffect(() => { fetchTestimonials(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Move focus into the topic-blocked dialog when it opens — same reasoning as
+  // LegalModal's closeBtnRef: without this, focus stays on whatever triggered the
+  // dialog (outside its DOM subtree), so the dialog's own Escape handler would
+  // never see the keydown, and screen readers wouldn't announce the dialog either.
+  useEffect(() => {
+    if (topicBlocked) topicBlockedBtnRef.current?.focus();
+  }, [topicBlocked]);
 
   // Inject keyframe animations
   useEffect(() => {
@@ -2217,13 +2263,22 @@ useEffect(() => {
   );
   const footer = <Footer onOpenModal={setLegalModal} onNav={setView} onHowToUse={() => { setSafetyReturn("home"); setView("safety"); }} />;
 
+  // Backdrop: click-to-dismiss is a mouse-only convenience. Keyboard/screen-reader users
+  // have two full equivalents instead — Escape (handled below) and the real "Try a
+  // different topic" button inside the dialog — so this div is deliberately left out of
+  // the tab order rather than turned into a nonsensical full-viewport button, per
+  // WAI-ARIA APG guidance for dismissible dialogs.
   const topicBlockedModal = topicBlocked ? (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/no-noninteractive-element-interactions
     <div
       style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.82)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: "1.5rem" }}
       onClick={() => { setTopicBlocked(false); setView("home"); }}
+      onKeyDown={(e) => { if (e.key === "Escape") { setTopicBlocked(false); setView("home"); } }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
         style={{ background: "#0d1030", border: "0.5px solid rgba(255,255,255,0.12)", borderRadius: 20, padding: "2rem 1.75rem", maxWidth: 480, width: "100%" }}
       >
         <div style={{ fontSize: "1.1rem", fontWeight: 300, color: "#e8e6f0", marginBottom: "0.75rem", letterSpacing: "0.04em" }}>
@@ -2237,6 +2292,7 @@ useEffect(() => {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
           <button
+            ref={topicBlockedBtnRef}
             style={{ ...S.btnPrimary, width: "100%" }}
             onClick={() => { setTopicBlocked(false); setView("home"); setStep(0); }}
           >
@@ -2459,7 +2515,7 @@ useEffect(() => {
                 <div style={authError.includes("Check your email") || authError.includes("reset link") ? S.infoBox : S.errorBox}>{authError}</div>
               )}
               <input style={{ ...S.input, marginBottom: "1rem" }} type="email" placeholder="Email"
-                value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} autoFocus />
+                value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} />
               <button style={{ ...S.btnPrimary, width: "100%", marginBottom: "0.75rem" }}
                 onClick={handleForgotPassword} disabled={authBusy}>
                 {authBusy ? "..." : "Send Reset Email"}
@@ -2480,7 +2536,7 @@ useEffect(() => {
                   )}
                   <form onSubmit={handleAuth}>
                     <input style={{ ...S.input, marginBottom: "0.75rem" }} type="email" placeholder="Email"
-                      value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required autoFocus />
+                      value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required />
                     <input style={{ ...S.input, marginBottom: "0.4rem" }}
                       type="password" placeholder="Password (min 6 characters)"
                       value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required />
@@ -2549,13 +2605,18 @@ useEffect(() => {
                   {showCreateAccount && (
                     <form onSubmit={handleAuth} style={{ marginTop: "1rem" }}>
                       <input style={{ ...S.input, marginBottom: "0.75rem" }} type="email" placeholder="Email"
-                        value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required autoFocus />
+                        value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} required />
                       <input style={{ ...S.input, marginBottom: "1rem" }}
                         type="password" placeholder="Password (min 6 characters)"
                         value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} required />
                       <div
+                        role="checkbox"
+                        aria-checked={termsChecked}
+                        aria-label="I agree to the Terms of Service, Privacy Policy, and Clinical Disclaimer"
+                        tabIndex={0}
                         style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "0.85rem" }}
                         onClick={() => setTermsChecked((v) => !v)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setTermsChecked((v) => !v); } }}
                       >
                         <div style={{
                           width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
@@ -2568,19 +2629,24 @@ useEffect(() => {
                         </div>
                         <span style={{ fontSize: "0.8rem", color: "#8a879e", lineHeight: 1.55 }}>
                           I agree to the{" "}
-                          <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
-                            onClick={(e) => { e.stopPropagation(); setLegalModal("terms"); }}>Terms of Service</span>
+                          <button type="button" style={{ ...S.linkButton }}
+                            onClick={(e) => { e.stopPropagation(); setLegalModal("terms"); }}>Terms of Service</button>
                           {", "}
-                          <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
-                            onClick={(e) => { e.stopPropagation(); setLegalModal("privacy"); }}>Privacy Policy</span>
+                          <button type="button" style={{ ...S.linkButton }}
+                            onClick={(e) => { e.stopPropagation(); setLegalModal("privacy"); }}>Privacy Policy</button>
                           {", and "}
-                          <span style={{ color: "#a8d8c8", textDecoration: "underline", cursor: "pointer" }}
-                            onClick={(e) => { e.stopPropagation(); setLegalModal("disclaimer"); }}>Clinical Disclaimer</span>
+                          <button type="button" style={{ ...S.linkButton }}
+                            onClick={(e) => { e.stopPropagation(); setLegalModal("disclaimer"); }}>Clinical Disclaimer</button>
                         </span>
                       </div>
                       <div
+                        role="checkbox"
+                        aria-checked={ageConfirmed}
+                        aria-label="I confirm I am 18 years of age or older"
+                        tabIndex={0}
                         style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "1.25rem" }}
                         onClick={() => setAgeConfirmed((v) => !v)}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setAgeConfirmed((v) => !v); } }}
                       >
                         <div style={{
                           width: 18, height: 18, borderRadius: 4, flexShrink: 0, marginTop: 2,
@@ -2828,6 +2894,7 @@ useEffect(() => {
                 <span>For best results, use headphones — especially for <strong style={{ color: "#a8d8c8" }}>{form.background}</strong></span>
               </div>
             )}
+            <h3 style={{ fontSize: "0.72rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#8a879e", marginBottom: "0.5rem" }}>Transcript</h3>
             <div style={S.scriptBox}>{renderScript(result.script)}</div>
             <div style={S.row}>
               <button style={S.btn} onClick={() => setView("home")}>Home</button>
@@ -3050,8 +3117,13 @@ useEffect(() => {
 
             {/* Checkbox */}
             <div
+              role="checkbox"
+              aria-checked={safetyChecked}
+              aria-label="I understand and agree to use Mind Tranceform safely"
+              tabIndex={0}
               style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "1.5rem" }}
               onClick={() => setSafetyChecked((v) => !v)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSafetyChecked((v) => !v); } }}
             >
               <div style={{
                 width: 20, height: 20, borderRadius: 5, flexShrink: 0, marginTop: 2,
@@ -3144,7 +3216,14 @@ useEffect(() => {
           )}
           {sessions.map((s) => (
             <div key={s.id} style={{ ...S.sessionItem, opacity: sessionDetailLoading ? 0.5 : 1, pointerEvents: sessionDetailLoading ? "none" : "auto" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", cursor: "pointer" }} onClick={() => openSession(s.id)}>
+              <div
+                role="button"
+                tabIndex={0}
+                aria-label={`Open session: ${s.title}`}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", cursor: "pointer" }}
+                onClick={() => openSession(s.id)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openSession(s.id); } }}
+              >
                 <div>
                   <div style={{ fontSize: "0.92rem", color: "#e8e6f0" }}>{s.title}</div>
                   <div style={{ fontSize: "0.75rem", color: "#8a879e", marginTop: 3 }}>{s.program} · {s.voice}</div>
@@ -3156,6 +3235,9 @@ useEffect(() => {
                 >✕</button>
               </div>
               {deleteConfirmId === s.id && (
+                // Propagation guard only (stops Delete/Cancel clicks — mouse or keyboard-
+                // triggered — from bubbling to the row's openSession handler above). Not a
+                // control of its own, so no keyboard handler is needed here.
                 <div style={{ marginTop: "0.75rem", paddingTop: "0.75rem", borderTop: "0.5px solid rgba(255,255,255,0.08)" }} onClick={(e) => e.stopPropagation()}>
                   <div style={{ fontSize: "0.82rem", color: "#e8e6f0", marginBottom: "0.6rem" }}>Are you sure? This cannot be undone.</div>
                   <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -3198,6 +3280,7 @@ useEffect(() => {
           {selectedSession.background && (
             <BackgroundPlayer background={selectedSession.background} intensity={selectedSession.backgroundIntensity} />
           )}
+          <h3 style={{ fontSize: "0.72rem", letterSpacing: "0.15em", textTransform: "uppercase", color: "#8a879e", marginBottom: "0.5rem" }}>Transcript</h3>
           <div style={S.scriptBox}>{renderScript(selectedSession.script)}</div>
           {!selectedSession.audioError && (
             !plan ? (
@@ -3290,6 +3373,9 @@ useEffect(() => {
             </div>
             {WL_PLANS.map((p) => (
               <div key={p.id}
+                role="radio"
+                aria-checked={wlSelectedPlan === p.id}
+                tabIndex={0}
                 style={{
                   ...S.sessionItem,
                   padding: "1.1rem 1.25rem",
@@ -3299,6 +3385,7 @@ useEffect(() => {
                   cursor: "pointer",
                 }}
                 onClick={() => setWlSelectedPlan(p.id)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setWlSelectedPlan(p.id); } }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.4rem" }}>
                   <div style={{ fontSize: "1rem", color: "#e8e6f0" }}>{p.label}</div>
@@ -3813,17 +3900,18 @@ useEffect(() => {
           {!plan && sessionsUsed >= 1 && (
             <div style={{ ...S.freeTag, color: "#8a879e", marginTop: "1rem" }}>
               Free session used —{" "}
-              <span style={{ color: "#a8d8c8", cursor: "pointer", textDecoration: "underline" }} onClick={() => setView("payment")}>
+              <button type="button" style={{ ...S.linkButton }} onClick={() => setView("payment")}>
                 upgrade to continue
-              </span>
+              </button>
             </div>
           )}
           {plan && (
             <div style={{ ...S.freeTag, color: "#8a879e", marginTop: "1rem", textTransform: "capitalize" }}>
-              Plan: <span
-                style={{ color: "#a8d8c8", cursor: "pointer", textDecoration: "underline" }}
+              Plan: <button
+                type="button"
+                style={{ ...S.linkButton }}
                 onClick={() => { setView("account"); fetchSubStatus(); setCancelConfirm(false); }}
-              >{plan}</span>
+              >{plan}</button>
             </div>
           )}
         </div>
@@ -3890,8 +3978,13 @@ useEffect(() => {
 
             {/* Optional headphones checkbox */}
             <div
+              role="checkbox"
+              aria-checked={bgInstructionsChecked}
+              aria-label="I'll use headphones for background audio"
+              tabIndex={0}
               style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", cursor: "pointer", marginBottom: "1.5rem" }}
               onClick={() => setBgInstructionsChecked((v) => !v)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setBgInstructionsChecked((v) => !v); } }}
             >
               <div style={{
                 width: 20, height: 20, borderRadius: 5, flexShrink: 0, marginTop: 2,
@@ -3944,19 +4037,27 @@ useEffect(() => {
           {!blogLoading && !blogPosts.length && (
             <div style={{ textAlign: "center", color: "#8a879e", padding: "2rem" }}>No posts published yet.</div>
           )}
-          {blogPosts.map(post => (
-            <div key={post.id} style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.09)", borderRadius: 14, padding: "1.5rem", marginBottom: "1rem", cursor: "pointer" }}
-              onClick={() => {
-                window.history.pushState({}, "", `/blog/${post.slug}`);
-                setBlogPost(post);
-                setView("blogPost");
-              }}>
+          {blogPosts.map(post => {
+            function openPost() {
+              window.history.pushState({}, "", `/blog/${post.slug}`);
+              setBlogPost(post);
+              setView("blogPost");
+            }
+            return (
+            <div key={post.id}
+              role="button"
+              tabIndex={0}
+              aria-label={`Read post: ${post.title || post.topic}`}
+              style={{ background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.09)", borderRadius: 14, padding: "1.5rem", marginBottom: "1rem", cursor: "pointer" }}
+              onClick={openPost}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPost(); } }}>
               <div style={{ fontSize: "0.68rem", letterSpacing: "0.18em", textTransform: "uppercase", color: "#a8d8c8", marginBottom: "0.5rem" }}>{post.topic} · {fmt(post.published_at)}</div>
               <div style={{ fontSize: "1.15rem", fontWeight: 300, color: "#e8e6f0", marginBottom: "0.6rem", lineHeight: 1.4 }}>{post.title}</div>
               <div style={{ fontSize: "0.84rem", color: "#8a879e", lineHeight: 1.7 }}>{(post.excerpt || "").slice(0, 180)}{post.excerpt?.length > 180 ? "…" : ""}</div>
               <div style={{ marginTop: "0.85rem", fontSize: "0.78rem", color: "#a8d8c8" }}>Read more →</div>
             </div>
-          ))}
+            );
+          })}
           <div style={{ textAlign: "center", padding: "1.5rem 0 2rem" }}>
             <button style={{ ...S.btn, fontSize: "0.82rem" }} onClick={() => { window.history.pushState({}, "", "/"); setView(user ? "home" : "landing"); }}>← Back to App</button>
           </div>
@@ -4141,7 +4242,6 @@ useEffect(() => {
               placeholder="e.g. I can't stop thinking about tomorrow. I just need to wind down."
               maxLength={280}
               value={fastEntryText}
-              autoFocus
               onChange={(e) => setFastEntryText(e.target.value)}
             />
             <div style={{ fontSize: "0.72rem", color: "#8a879e", textAlign: "right", marginTop: "0.3rem", marginBottom: "0.5rem" }}>
@@ -4195,7 +4295,6 @@ useEffect(() => {
               type="text"
               placeholder={current.placeholder}
               value={form[current.id]}
-              autoFocus
               onChange={(e) => { updateForm(current.id, e.target.value); setError(""); }}
               onKeyDown={(e) => { if (e.key === "Enter") goNext(); }}
             />
@@ -4205,7 +4304,6 @@ useEffect(() => {
                 style={{ ...S.input, minHeight: 80, resize: "vertical", lineHeight: 1.55, overflow: "auto", marginBottom: "0.75rem" }}
                 placeholder="e.g. Anything turning over in your head — work, a relationship, sleep, something heavier..."
                 value={form.fears}
-                autoFocus
                 onChange={(e) => { updateForm("fears", e.target.value); setError(""); }}
               />
               <div style={{ fontSize: "0.78rem", color: "#8a879e", marginBottom: "0.75rem", marginTop: "-0.35rem", letterSpacing: "0.02em" }}>

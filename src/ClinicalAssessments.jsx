@@ -88,13 +88,17 @@ export function SafetyResourcesCard({ onAcknowledge }) {
 // ─── Answer picker for one question ───────────────────────────────────────────
 function AnswerOptions({ answerScale, value, onSelect }) {
   return (
-    <div style={{ display: "grid", gap: "0.6rem" }}>
+    <div style={{ display: "grid", gap: "0.6rem" }} role="radiogroup">
       {answerScale.map((opt) => {
         const selected = value === opt.value;
         return (
           <div
             key={opt.value}
+            role="radio"
+            aria-checked={selected}
+            tabIndex={0}
             onClick={() => onSelect(opt.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(opt.value); } }}
             style={{
               display: "flex", alignItems: "center", gap: "0.85rem",
               background: selected ? "rgba(168,216,200,0.08)" : "rgba(255,255,255,0.06)",
