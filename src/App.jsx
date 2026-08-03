@@ -390,6 +390,23 @@ const LEGAL_VIEWS_BY_PATH = {
   "/clinical-disclaimer": "clinicalDisclaimer",
 };
 
+// In-app browser detection (TikTok/Instagram/Facebook/Line webviews). These wrap pages in
+// a stripped-down browser that, on iOS, often can't Add to Home Screen the way real Safari
+// can — the user has to tap "···"/share and choose "Open in Safari" first, an extra step
+// most people never take. Since our whole install path is "Save to home screen" (no iOS
+// app yet), this can silently cap install rate for TikTok/IG bio-link traffic even after
+// the video-side watch%/CTR fixes land.
+// NOT confirmed against a live device inside this session (no phone / TikTok or Instagram
+// app / WKWebView-capable browser tool available here) — shipped anyway per Mark's call,
+// since this is a long-documented, still-current WebKit restriction, not a novel guess.
+// See Discussions/code-prompts/in-app-browser-add-to-homescreen-check.md.
+function detectInAppBrowser() {
+  const ua = navigator.userAgent || "";
+  const isInApp = /TikTok|musical_ly|Instagram|FBAN|FBAV|Line\//i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  return { isInApp, isIOS };
+}
+
 function LegalModal({ type, onClose }) {
   const blocks = type === "privacy" ? PRIVACY_TEXT : type === "disclaimer" ? DISCLAIMER_TEXT : TERMS_TEXT;
   // Move focus onto the close button when the dialog opens. This is required for the
@@ -1130,6 +1147,11 @@ export default function MindTranceformApp() {
   // PWA install prompt
   const [deferredInstall, setDeferredInstall] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
+
+  // In-app browser (TikTok/IG/etc.) detection — see detectInAppBrowser() above.
+  // Computed once; navigator.userAgent doesn't change mid-session.
+  const [inAppBrowser] = useState(() => detectInAppBrowser());
+  const [iabBannerDismissed, setIabBannerDismissed] = useState(() => !!localStorage.getItem("mt_iab_dismissed"));
 
   // PHQ-9 / GAD-7 clinical assessments + progress
   const [caStatus, setCaStatus]                     = useState(null); // GET /clinical-assessments/status response
@@ -2355,6 +2377,19 @@ useEffect(() => {
       <div style={S.root}>
         <StarField />
         <div style={S.wrap}>
+          {inAppBrowser.isInApp && !iabBannerDismissed && (
+            <div style={{ ...S.infoBox, marginBottom: "1.5rem", textAlign: "left" }}>
+              <div style={{ fontSize: "0.82rem", color: "#e8e6f0", lineHeight: 1.6, marginBottom: "0.6rem" }}>
+                {inAppBrowser.isIOS
+                  ? "You're viewing this inside an app's built-in browser, which usually can't save pages to your home screen. Tap the \"···\" or share icon, choose \"Open in Safari,\" then use Safari's Share menu → \"Add to Home Screen.\""
+                  : "For the best experience — including saving this app to your home screen — tap the menu (⋮) and choose \"Open in browser.\""}
+              </div>
+              <button
+                style={{ ...S.btn, fontSize: "0.76rem", padding: "0.4rem 0.9rem" }}
+                onClick={() => { localStorage.setItem("mt_iab_dismissed", "1"); setIabBannerDismissed(true); }}
+              >Got it</button>
+            </div>
+          )}
           {/* ── Hero ── */}
           <Logo hero brand={whiteLabel} />
           <div style={{ textAlign: "center", padding: "0.5rem 0 2.5rem" }}>
@@ -2940,6 +2975,10 @@ useEffect(() => {
                 <div style={{ fontSize: "0.75rem", color: "#8a879e", marginBottom: "0.85rem" }}>
                   {deferredInstall
                     ? "Install for easy access — opens instantly, no browser needed."
+                    : inAppBrowser.isInApp && inAppBrowser.isIOS
+                    ? "Tap \"···\" or the share icon, choose \"Open in Safari,\" then use Safari's Share menu → \"Add to Home Screen.\""
+                    : inAppBrowser.isInApp
+                    ? "Tap the menu (⋮) and choose \"Open in browser\" first, then use the browser menu to Add to Home Screen."
                     : "Tap your browser menu and select \"Add to Home Screen\" for instant access."}
                 </div>
                 <div style={S.row}>
