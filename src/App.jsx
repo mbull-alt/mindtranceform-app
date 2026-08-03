@@ -72,10 +72,18 @@ function getStyleOptions(plan, isAdmin) {
   ];
 }
 
+// Annual prices are "limited time" (decided 2026-06-19) — see
+// Discussions/code-prompts/annual-pricing-stripe-live.md. Stripe Price objects
+// created 2026-07-09: Premium annual price_1Trjhu20DZybuAfdynOedTqC ($149.99/yr),
+// Pro annual price_1Trji020DZybuAfd9zBo0xk1 ($299.99/yr). No annual option for
+// Single (one-time, not a subscription).
 const PAID_PLANS = [
-  { id: "single",  label: "Single Session", price: "$14.99", period: "",    sub: "One custom session · 5 min",        accent: "#8a879e" },
-  { id: "premium", label: "Premium",        price: "$19.99", period: "/mo", sub: "Unlimited sessions · up to 15 min", accent: "#a8d8c8" },
-  { id: "pro",     label: "Pro",            price: "$29.99", period: "/mo", sub: "Unlimited sessions · up to 30 min", accent: "#c9a8d8" },
+  { id: "single",  label: "Single Session", sub: "One custom session · 5 min",        accent: "#8a879e",
+    monthly: { price: 14.99, period: "" }, annual: null },
+  { id: "premium", label: "Premium",        sub: "Unlimited sessions · up to 15 min", accent: "#a8d8c8",
+    monthly: { price: 19.99, period: "/mo" }, annual: { price: 149.99, period: "/yr" } },
+  { id: "pro",     label: "Pro",            sub: "Unlimited sessions · up to 30 min", accent: "#c9a8d8",
+    monthly: { price: 29.99, period: "/mo" }, annual: { price: 299.99, period: "/yr" } },
 ];
 
 const TECHNIQUE_TOOLTIPS = {
@@ -1036,6 +1044,9 @@ export default function MindTranceformApp() {
   const [plan, setPlan]               = useState(() => localStorage.getItem("mt_plan"));
   const [sessionsUsed, setSessionsUsed] = useState(() => parseInt(localStorage.getItem("mt_sessions_used") || "0"));
 
+  // Pricing page monthly/annual toggle (view="payment") — not persisted, resets per visit.
+  const [billingInterval, setBillingInterval] = useState("monthly");
+
   // Auth form
   const [authMode, setAuthMode]               = useState("login");
   const [authEmail, setAuthEmail]             = useState("");
@@ -1752,13 +1763,13 @@ useEffect(() => {
     else setView("home");
   }
 
-  async function startCheckout(planId) {
+  async function startCheckout(planId, billing = "monthly") {
     try {
       const token = await getToken();
       const res = await fetch(`${BACKEND_URL}/create-checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ plan: planId, email: user?.email }),
+        body: JSON.stringify({ plan: planId, billing, email: user?.email }),
       });
       const data = await res.json();
       if (data.checkoutUrl) window.location.href = data.checkoutUrl;
@@ -3073,23 +3084,47 @@ useEffect(() => {
           </div>
           <div style={S.freeTag}>✦ Your first session is free. No card needed.</div>
           <div style={{ height: "1.5rem" }} />
-          {PAID_PLANS.map((p) => (
-            <div key={p.id} style={{ ...S.sessionItem, padding: "1.1rem 1.25rem", marginBottom: "0.75rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.3rem" }}>
-                <div style={{ fontSize: "1rem", color: "#e8e6f0" }}>{p.label}</div>
-                <div style={{ fontSize: "1.05rem", color: p.accent }}>
-                  {p.price}<span style={{ fontSize: "0.72rem", color: "#8a879e" }}>{p.period}</span>
+          <div style={{ ...S.row, marginTop: 0, marginBottom: "1.5rem" }} role="radiogroup" aria-label="Billing interval">
+            <button type="button" role="radio" aria-checked={billingInterval === "monthly"}
+              style={billingInterval === "monthly" ? S.btnPrimary : S.btn}
+              onClick={() => setBillingInterval("monthly")}
+            >Monthly</button>
+            <button type="button" role="radio" aria-checked={billingInterval === "annual"}
+              style={billingInterval === "annual" ? S.btnPrimary : S.btn}
+              onClick={() => setBillingInterval("annual")}
+            >Annual · limited time</button>
+          </div>
+          {PAID_PLANS.map((p) => {
+            const useAnnual = billingInterval === "annual" && !!p.annual;
+            const priceInfo = useAnnual ? p.annual : p.monthly;
+            const monthlyEquivalent = useAnnual ? priceInfo.price / 12 : null;
+            const savingsPct = useAnnual
+              ? Math.round((1 - priceInfo.price / (p.monthly.price * 12)) * 100)
+              : null;
+            return (
+              <div key={p.id} style={{ ...S.sessionItem, padding: "1.1rem 1.25rem", marginBottom: "0.75rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.3rem" }}>
+                  <div style={{ fontSize: "1rem", color: "#e8e6f0" }}>{p.label}</div>
+                  <div style={{ fontSize: "1.05rem", color: p.accent }}>
+                    ${priceInfo.price.toFixed(2)}<span style={{ fontSize: "0.72rem", color: "#8a879e" }}>{priceInfo.period}</span>
+                  </div>
                 </div>
+                {useAnnual && (
+                  <div style={{ fontSize: "0.74rem", color: "#8a879e", marginBottom: "0.3rem" }}>
+                    ${monthlyEquivalent.toFixed(2)}/mo billed annually
+                    {savingsPct > 0 && <span style={{ color: "#a8d8c8", marginLeft: "0.5rem" }}>Save {savingsPct}%</span>}
+                  </div>
+                )}
+                <div style={{ fontSize: "0.78rem", color: "#8a879e", marginBottom: "0.85rem" }}>{p.sub}</div>
+                <button
+                  style={{ ...S.btnPrimary, width: "100%", borderColor: p.accent, color: p.accent }}
+                  onClick={() => startCheckout(p.id, useAnnual ? "annual" : "monthly")}
+                >
+                  Choose {p.label} →
+                </button>
               </div>
-              <div style={{ fontSize: "0.78rem", color: "#8a879e", marginBottom: "0.85rem" }}>{p.sub}</div>
-              <button
-                style={{ ...S.btnPrimary, width: "100%", borderColor: p.accent, color: p.accent }}
-                onClick={() => startCheckout(p.id)}
-              >
-                Choose {p.label} →
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <button style={S.resetBtn} onClick={() => setView("home")}>← Back to home</button>
         {footer}
