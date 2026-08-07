@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "com.mindtranceformapp.app.twa",
+    "sha256_cert_fingerprints": ["97:95:6D:3A:C4:67:15:C7:D4:15:32:CA:6A:30:B8:27:3D:CC:E5:F1:43:CE:66:48:67:79:9F:FA:BB:AF:20:6F"]
+  }
+}]
