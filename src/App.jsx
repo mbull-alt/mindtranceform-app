@@ -866,7 +866,9 @@ export function Logo({ sub = false, brand = null, hero = false }) {
       <img
         src={hero ? "/logo-hero.png" : "/logo-header.png"}
         alt="Mind Tranceform"
-        style={{ maxWidth: hero ? "min(420px, 100%)" : "min(360px, 100%)", height: "auto", display: "block", margin: "0 auto" }}
+        width={hero ? 702 : 700}
+        height={559}
+        style={{ maxWidth: hero ? "min(420px, 100%)" : "min(360px, 100%)", width: "100%", height: "auto", display: "block", margin: "0 auto" }}
       />
       {sub && <p style={S.logoSub}>Personalized Meditation &amp; Hypnosis</p>}
     </div>
@@ -2382,7 +2384,7 @@ useEffect(() => {
     ];
     const reviews = PLACEHOLDERS;
     const lbl = (text) => (
-      <div style={{ fontSize: "0.65rem", letterSpacing: "0.28em", textTransform: "uppercase", color: "#8a879e", marginBottom: "1.25rem", marginTop: "0.25rem" }}>{text}</div>
+      <h2 style={{ fontSize: "0.65rem", fontWeight: 400, letterSpacing: "0.28em", textTransform: "uppercase", color: "#8a879e", marginBottom: "1.25rem", marginTop: "0.25rem" }}>{text}</h2>
     );
     return (
       <div style={S.root}>
@@ -2404,9 +2406,9 @@ useEffect(() => {
           {/* ── Hero ── */}
           <Logo hero brand={whiteLabel} />
           <div style={{ textAlign: "center", padding: "0.5rem 0 2.5rem" }}>
-            <div style={{ fontSize: "clamp(1.5rem, 5vw, 2rem)", fontWeight: 300, lineHeight: 1.35, color: "#e8e6f0", marginBottom: "1rem", letterSpacing: "0.02em" }}>
+            <h1 style={{ fontSize: "clamp(1.5rem, 5vw, 2rem)", fontWeight: 300, lineHeight: 1.35, color: "#e8e6f0", margin: "0 0 1rem", letterSpacing: "0.02em" }}>
               Your name. Your goal.<br />Your session.
-            </div>
+            </h1>
             <div style={{ fontSize: "0.92rem", color: "#8a879e", lineHeight: 1.75, marginBottom: "2rem", maxWidth: 400, margin: "0 auto 2rem" }}>
               Personalized AI meditation and hypnosis — written for you, voiced by AI, ready in under 60 seconds.
             </div>

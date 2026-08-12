@@ -1,7 +1,7 @@
 {
   "name": "Mind Tranceform",
   "short_name": "Tranceform",
-  "description": "Personalized AI meditation and hypnosis sessions",
+  "description": "Personalized AI-generated hypnosis and meditation sessions for sleep, stress, anxiety, and focus — a new session built around you every time, not a fixed recording library.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
