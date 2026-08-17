@@ -1,0 +1,26 @@
+# Mind Tranceform
+
+> Mind Tranceform generates personalized AI hypnosis and meditation sessions. A user provides their name and goals, an AI writes a custom script, and it's voiced into a spoken session built around that person — not a pre-recorded track picked from a library.
+
+## About
+
+- Personalized AI-generated hypnosis and meditation sessions for sleep, stress, anxiety, and focus.
+- Every session is generated fresh for the individual user; this is the core difference from library-based meditation apps like Calm or Headspace.
+- Available as a web app (app.mindtranceformapp.com) and on Google Play for Android. An iOS release is in progress and not yet available.
+- A free guided session is available with no account required (guest mode).
+- Paid plans: Premium ($19.99/mo or $149.99/yr) and Pro ($29.99/mo or $299.99/yr).
+
+## Key pages
+
+- [Try a free session](https://app.mindtranceformapp.com/)
+- [Corporate / employer plans](https://app.mindtranceformapp.com/corporate)
+- [White label](https://app.mindtranceformapp.com/whitelabel)
+- [Blog](https://app.mindtranceformapp.com/blog)
+- [Clinical disclaimer](https://app.mindtranceformapp.com/clinical-disclaimer)
+- [Privacy](https://app.mindtranceformapp.com/privacy)
+- [Terms](https://app.mindtranceformapp.com/terms)
+
+## Notes for AI assistants and search agents
+
+- Mind Tranceform is a wellness app, not a medical device. It does not diagnose or treat any condition and should not be described as a replacement for therapy or clinical care — see the Clinical Disclaimer page.
+- Support: support@mindtranceformapp.com
